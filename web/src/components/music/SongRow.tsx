@@ -8,7 +8,7 @@ import { coverUrl } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { usePlayerStore } from "@/store/playerStore";
 import { cn } from "@/lib/utils";
-import { Menu, MenuItem } from "@/components/ui/Menu";
+import { ContextMenu, Menu, MenuItem, type ContextMenuPosition } from "@/components/ui/Menu";
 import { SaveToPlaylistDialog } from "@/components/music/SaveToPlaylistDialog";
 
 interface SongRowProps {
@@ -26,6 +26,7 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
   const playQueue = usePlayerStore((s) => s.playQueue);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [contextPos, setContextPos] = useState<ContextMenuPosition | null>(null);
 
   const isCurrent = currentSong?.id === song.id;
 
@@ -37,9 +38,20 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
     }
   }
 
+  const menuItems = (
+    <MenuItem onClick={() => setSaveOpen(true)}>
+      <ListPlus size={16} />
+      Save to playlist
+    </MenuItem>
+  );
+
   return (
     <>
       <div
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setContextPos({ x: event.clientX, y: event.clientY });
+        }}
         className={cn(
           "group grid grid-cols-[2rem_1fr_auto] sm:grid-cols-[2rem_1fr_10rem_3rem_3rem] items-center gap-4 rounded-lg px-3 py-2 hover:bg-bg-hover",
           isCurrent && "text-accent"
@@ -106,14 +118,15 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
                 </button>
               }
             >
-              <MenuItem onClick={() => setSaveOpen(true)}>
-                <ListPlus size={16} />
-                Save to playlist
-              </MenuItem>
+              {menuItems}
             </Menu>
           </div>
         </div>
       </div>
+
+      <ContextMenu position={contextPos} onClose={() => setContextPos(null)}>
+        {menuItems}
+      </ContextMenu>
 
       <SaveToPlaylistDialog song={song} open={saveOpen} onClose={() => setSaveOpen(false)} />
     </>

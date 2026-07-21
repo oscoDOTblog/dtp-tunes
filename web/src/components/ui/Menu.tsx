@@ -3,12 +3,16 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/utils";
+
+const PANEL_CLASSES =
+  "z-40 min-w-48 overflow-hidden rounded-lg border border-border-subtle bg-bg-elevated py-1 shadow-xl";
 
 interface MenuProps {
   trigger: ReactNode;
@@ -64,14 +68,79 @@ export function Menu({ trigger, children, align = "right", className }: MenuProp
         <div
           id={menuId}
           role="menu"
-          className={cn(
-            "absolute top-full z-40 mt-1 min-w-48 overflow-hidden rounded-lg border border-border-subtle bg-bg-elevated py-1 shadow-xl",
-            align === "right" ? "right-0" : "left-0"
-          )}
+          className={cn("absolute top-full mt-1", PANEL_CLASSES, align === "right" ? "right-0" : "left-0")}
         >
           <div onClick={() => setOpen(false)}>{children}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+export interface ContextMenuPosition {
+  x: number;
+  y: number;
+}
+
+interface ContextMenuProps {
+  position: ContextMenuPosition | null;
+  onClose: () => void;
+  children: ReactNode;
+}
+
+/**
+ * Cursor-anchored menu for right-click, Spotify-style. Render with a
+ * position from the contextmenu event; clamped to the viewport.
+ */
+export function ContextMenu({ position, onClose, children }: ContextMenuProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Clamp to the viewport by measuring the rendered panel and adjusting its
+  // style directly — avoids a second render pass.
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!position || !panel) return;
+    const x = Math.max(8, Math.min(position.x, window.innerWidth - panel.offsetWidth - 8));
+    const y = Math.max(8, Math.min(position.y, window.innerHeight - panel.offsetHeight - 8));
+    panel.style.left = `${x}px`;
+    panel.style.top = `${y}px`;
+  }, [position]);
+
+  useEffect(() => {
+    if (!position) return;
+
+    function onPointerDown(event: MouseEvent) {
+      if (!panelRef.current?.contains(event.target as Node)) onClose();
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("resize", onClose);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [position, onClose]);
+
+  if (!position) return null;
+
+  return (
+    <div
+      ref={panelRef}
+      role="menu"
+      style={{ left: position.x, top: position.y }}
+      className={cn("fixed", PANEL_CLASSES)}
+      onClick={onClose}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      {children}
     </div>
   );
 }
