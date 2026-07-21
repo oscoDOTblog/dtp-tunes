@@ -101,7 +101,6 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
                   type="button"
                   className="flex h-8 w-8 items-center justify-center rounded-full text-fg-secondary hover:bg-bg-elevated-2 hover:text-fg-primary"
                   aria-label="More options"
-                  onClick={(event) => event.stopPropagation()}
                 >
                   <MoreVertical size={16} />
                 </button>

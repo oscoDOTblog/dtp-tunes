@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Loader2, Plus, X } from "lucide-react";
 import { useFetch } from "@/lib/useFetch";
 import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/ui/ToastProvider";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PlaylistCover } from "@/components/music/PlaylistCover";
+import { usePlaylistsRefresh } from "@/store/playlistsRefreshStore";
 import type { Playlist, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ interface SaveToPlaylistDialogProps {
 
 export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDialogProps) {
   const toast = useToast();
+  const bumpPlaylists = usePlaylistsRefresh((s) => s.bump);
   const { data: playlists, isLoading, error, refetch } = useFetch<Playlist[]>(
     open ? `/api/playlists?sort=recent&songId=${encodeURIComponent(song.id)}` : null
   );
@@ -37,6 +39,7 @@ export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDial
     setBusyId(playlist.id);
     try {
       await api.patch(`/api/playlists/${playlist.id}`, { songIdsToAdd: [song.id] });
+      bumpPlaylists();
       toast.success(`Added to “${playlist.name}”`);
       onClose();
     } catch (err) {
@@ -62,6 +65,7 @@ export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDial
         name: trimmed,
         songIds: [song.id],
       });
+      bumpPlaylists();
       toast.success(`Created “${created.name}” and added song`);
       setName("");
       setCreating(false);
@@ -113,7 +117,8 @@ export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDial
 
           <div className="flex flex-col gap-1">
             {(playlists ?? []).map((playlist) => {
-              const disabled = Boolean(playlist.containsSong) || busyId === playlist.id;
+              const isBusy = busyId === playlist.id;
+              const disabled = Boolean(playlist.containsSong) || busyId !== null;
               return (
                 <button
                   key={playlist.id}
@@ -122,21 +127,25 @@ export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDial
                   onClick={() => addToPlaylist(playlist)}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors",
-                    playlist.containsSong
-                      ? "cursor-not-allowed opacity-55"
-                      : "hover:bg-bg-hover"
+                    playlist.containsSong && "cursor-not-allowed opacity-55",
+                    !playlist.containsSong && !isBusy && "hover:bg-bg-hover",
+                    busyId !== null && !isBusy && "opacity-55",
+                    isBusy && "bg-bg-hover"
                   )}
                 >
                   <PlaylistCover coverArtIds={playlist.coverArtIds} size="md" alt={playlist.name} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-fg-primary">{playlist.name}</p>
                     <p className="truncate text-xs text-fg-muted">
-                      {playlist.containsSong
-                        ? "Already added"
-                        : `${playlist.songCount} ${playlist.songCount === 1 ? "song" : "songs"}`}
+                      {isBusy
+                        ? "Adding…"
+                        : playlist.containsSong
+                          ? "Already added"
+                          : `${playlist.songCount} ${playlist.songCount === 1 ? "song" : "songs"}`}
                     </p>
                   </div>
-                  {playlist.containsSong && <Check size={16} className="flex-shrink-0 text-accent" />}
+                  {isBusy && <Loader2 size={16} className="flex-shrink-0 animate-spin text-accent" />}
+                  {!isBusy && playlist.containsSong && <Check size={16} className="flex-shrink-0 text-accent" />}
                 </button>
               );
             })}
@@ -162,7 +171,8 @@ export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDial
                   Cancel
                 </Button>
                 <Button size="sm" onClick={createAndAdd} disabled={!name.trim() || creatingBusy}>
-                  Create
+                  {creatingBusy && <Loader2 size={14} className="animate-spin" />}
+                  {creatingBusy ? "Creating…" : "Create"}
                 </Button>
               </div>
             </div>

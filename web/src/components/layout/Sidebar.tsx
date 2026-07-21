@@ -1,12 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Home, Search, Library, ListMusic, Settings, Plus } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Home, Search, Library, ListMusic, Loader2, Settings, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFetch } from "@/lib/useFetch";
 import { PlaylistListItem } from "@/components/music/PlaylistListItem";
 import { api } from "@/lib/api";
+import { usePlaylistsRefresh } from "@/store/playlistsRefreshStore";
 import type { Playlist } from "@/lib/types";
 
 const navItems = [
@@ -17,11 +19,21 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { data: playlists, refetch } = useFetch<Playlist[]>("/api/playlists");
+  const router = useRouter();
+  const version = usePlaylistsRefresh((s) => s.version);
+  const bump = usePlaylistsRefresh((s) => s.bump);
+  const { data: playlists } = useFetch<Playlist[]>("/api/playlists", [version]);
+  const [creating, setCreating] = useState(false);
 
   async function createPlaylist() {
-    await api.post("/api/playlists", { name: "New Playlist", songIds: [] });
-    refetch();
+    setCreating(true);
+    try {
+      const created = await api.post<Playlist>("/api/playlists", { name: "New Playlist", songIds: [] });
+      bump();
+      router.push(`/playlist/${created.id}`);
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -54,8 +66,13 @@ export function Sidebar() {
           <ListMusic size={16} />
           Playlists
         </span>
-        <button onClick={createPlaylist} className="text-fg-secondary hover:text-fg-primary" aria-label="Create playlist">
-          <Plus size={16} />
+        <button
+          onClick={createPlaylist}
+          disabled={creating}
+          className="text-fg-secondary hover:text-fg-primary disabled:pointer-events-none disabled:opacity-40"
+          aria-label="Create playlist"
+        >
+          {creating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
         </button>
       </div>
 

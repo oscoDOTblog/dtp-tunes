@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { Play, Pencil, Trash2 } from "lucide-react";
+import { Play, Pencil, Trash2, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useFetch } from "@/lib/useFetch";
 import { SongRow } from "@/components/music/SongRow";
@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { api, ApiError } from "@/lib/api";
 import { formatAlbumDuration } from "@/lib/format";
 import { usePlayerStore } from "@/store/playerStore";
+import { usePlaylistsRefresh } from "@/store/playlistsRefreshStore";
 import type { Playlist, Song } from "@/lib/types";
 
 interface PlaylistDetail {
@@ -28,37 +29,54 @@ export default function PlaylistPage({ params }: { params: Promise<{ id: string 
   const toast = useToast();
   const { data, isLoading, error, refetch } = useFetch<PlaylistDetail>(`/api/playlists/${id}`, [id]);
   const playQueue = usePlayerStore((s) => s.playQueue);
+  const bumpPlaylists = usePlaylistsRefresh((s) => s.bump);
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [removingIndex, setRemovingIndex] = useState<number | null>(null);
+
+  const mutating = saving || deleting || removingIndex !== null;
 
   async function saveName() {
+    setSaving(true);
     try {
       await api.patch(`/api/playlists/${id}`, { name });
       setRenaming(false);
       refetch();
+      bumpPlaylists();
       toast.success("Playlist renamed");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to rename playlist");
+    } finally {
+      setSaving(false);
     }
   }
 
   async function deletePlaylist() {
+    setDeleting(true);
     try {
       await api.delete(`/api/playlists/${id}`);
+      bumpPlaylists();
       toast.success("Playlist deleted");
       router.push("/library");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to delete playlist");
+      setDeleting(false);
     }
   }
 
   async function removeSong(index: number) {
+    setRemovingIndex(index);
     try {
       await api.patch(`/api/playlists/${id}`, { songIndexesToRemove: [index] });
       toast.success("Removed from playlist");
       refetch();
+      bumpPlaylists();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to remove song");
+    } finally {
+      setRemovingIndex(null);
     }
   }
 
@@ -81,9 +99,10 @@ export default function PlaylistPage({ params }: { params: Promise<{ id: string 
           <p className="text-xs font-semibold uppercase tracking-wide text-fg-secondary">Playlist</p>
           {renaming ? (
             <div className="flex max-w-md items-center gap-2">
-              <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-              <Button size="sm" onClick={saveName}>
-                Save
+              <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus disabled={saving} />
+              <Button size="sm" onClick={saveName} disabled={saving || !name.trim()}>
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                {saving ? "Saving…" : "Save"}
               </Button>
             </div>
           ) : (
@@ -99,6 +118,7 @@ export default function PlaylistPage({ params }: { params: Promise<{ id: string 
             <Button
               variant="secondary"
               size="sm"
+              disabled={mutating}
               onClick={() => {
                 setName(playlist.name);
                 setRenaming(true);
@@ -106,8 +126,9 @@ export default function PlaylistPage({ params }: { params: Promise<{ id: string 
             >
               <Pencil size={14} /> Rename
             </Button>
-            <Button variant="secondary" size="sm" onClick={deletePlaylist}>
-              <Trash2 size={14} /> Delete
+            <Button variant="secondary" size="sm" onClick={deletePlaylist} disabled={mutating}>
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {deleting ? "Deleting…" : "Delete"}
             </Button>
           </div>
         </div>
@@ -124,10 +145,15 @@ export default function PlaylistPage({ params }: { params: Promise<{ id: string 
               </div>
               <button
                 onClick={() => removeSong(index)}
-                className="mr-2 hidden text-fg-muted hover:text-danger group-hover:block"
+                disabled={mutating}
+                className={
+                  removingIndex === index
+                    ? "mr-2 block text-fg-muted"
+                    : "mr-2 hidden text-fg-muted hover:text-danger disabled:pointer-events-none disabled:opacity-40 group-hover:block"
+                }
                 aria-label="Remove from playlist"
               >
-                <Trash2 size={16} />
+                {removingIndex === index ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
               </button>
             </div>
           ))}
