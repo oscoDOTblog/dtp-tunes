@@ -5,12 +5,14 @@ import { Play, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useFetch } from "@/lib/useFetch";
 import { SongRow } from "@/components/music/SongRow";
+import { PlaylistCover } from "@/components/music/PlaylistCover";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { api } from "@/lib/api";
+import { useToast } from "@/components/ui/ToastProvider";
+import { api, ApiError } from "@/lib/api";
 import { formatAlbumDuration } from "@/lib/format";
 import { usePlayerStore } from "@/store/playerStore";
 import type { Playlist, Song } from "@/lib/types";
@@ -23,25 +25,41 @@ interface PlaylistDetail {
 export default function PlaylistPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const toast = useToast();
   const { data, isLoading, error, refetch } = useFetch<PlaylistDetail>(`/api/playlists/${id}`, [id]);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
 
   async function saveName() {
-    await api.patch(`/api/playlists/${id}`, { name });
-    setRenaming(false);
-    refetch();
+    try {
+      await api.patch(`/api/playlists/${id}`, { name });
+      setRenaming(false);
+      refetch();
+      toast.success("Playlist renamed");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to rename playlist");
+    }
   }
 
   async function deletePlaylist() {
-    await api.delete(`/api/playlists/${id}`);
-    router.push("/library");
+    try {
+      await api.delete(`/api/playlists/${id}`);
+      toast.success("Playlist deleted");
+      router.push("/library");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to delete playlist");
+    }
   }
 
   async function removeSong(index: number) {
-    await api.patch(`/api/playlists/${id}`, { songIndexesToRemove: [index] });
-    refetch();
+    try {
+      await api.patch(`/api/playlists/${id}`, { songIndexesToRemove: [index] });
+      toast.success("Removed from playlist");
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to remove song");
+    }
   }
 
   if (isLoading) {
@@ -57,38 +75,41 @@ export default function PlaylistPage({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="flex flex-col gap-8 p-6 pb-32">
-      <div className="flex flex-col gap-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-fg-secondary">Playlist</p>
-        {renaming ? (
-          <div className="flex max-w-md items-center gap-2">
-            <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-            <Button size="sm" onClick={saveName}>
-              Save
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+        <PlaylistCover coverArtIds={playlist.coverArtIds} size="lg" alt={playlist.name} />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-fg-secondary">Playlist</p>
+          {renaming ? (
+            <div className="flex max-w-md items-center gap-2">
+              <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+              <Button size="sm" onClick={saveName}>
+                Save
+              </Button>
+            </div>
+          ) : (
+            <h1 className="text-3xl font-bold text-fg-primary sm:text-4xl">{playlist.name}</h1>
+          )}
+          <p className="text-sm text-fg-secondary">
+            {playlist.songCount} songs · {formatAlbumDuration(playlist.duration)}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => playQueue(songs, 0)} disabled={songs.length === 0}>
+              <Play size={16} fill="currentColor" /> Play
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setName(playlist.name);
+                setRenaming(true);
+              }}
+            >
+              <Pencil size={14} /> Rename
+            </Button>
+            <Button variant="secondary" size="sm" onClick={deletePlaylist}>
+              <Trash2 size={14} /> Delete
             </Button>
           </div>
-        ) : (
-          <h1 className="text-3xl font-bold text-fg-primary sm:text-4xl">{playlist.name}</h1>
-        )}
-        <p className="text-sm text-fg-secondary">
-          {playlist.songCount} songs · {formatAlbumDuration(playlist.duration)}
-        </p>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => playQueue(songs, 0)} disabled={songs.length === 0}>
-            <Play size={16} fill="currentColor" /> Play
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setName(playlist.name);
-              setRenaming(true);
-            }}
-          >
-            <Pencil size={14} /> Rename
-          </Button>
-          <Button variant="secondary" size="sm" onClick={deletePlaylist}>
-            <Trash2 size={14} /> Delete
-          </Button>
         </div>
       </div>
 
@@ -97,7 +118,7 @@ export default function PlaylistPage({ params }: { params: Promise<{ id: string 
       ) : (
         <div className="flex flex-col">
           {songs.map((song, index) => (
-            <div key={song.id} className="group flex items-center">
+            <div key={`${song.id}-${index}`} className="group flex items-center">
               <div className="flex-1">
                 <SongRow song={song} index={index} queue={songs} showAlbum showCover />
               </div>

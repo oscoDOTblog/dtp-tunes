@@ -20,6 +20,9 @@
   --color-success: #22c55e;
   --color-danger: #ef4444;
 
+  /* Filled portion of range sliders (seek bar, volume) */
+  --color-slider-fill: #ffffff;
+
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
@@ -67,6 +70,8 @@ html[data-accent="orange"] {
     --color-fg-secondary: #55535c;
     --color-fg-muted: #8b8892;
     --color-accent-soft: #fce4f1;
+    /* White fill would vanish on light tracks — use the primary fg instead. */
+    --color-slider-fill: #17161a;
   }
 
   html[data-accent="green"] {
@@ -127,7 +132,16 @@ input[type="range"] {
   appearance: none;
   height: 4px;
   border-radius: 999px;
-  background: var(--color-bg-hover);
+  /* Filled portion (set as --range-fill by the Slider component) renders in
+     bright white on top of the muted track, Spotify-style. */
+  --range-fill: 0%;
+  background: linear-gradient(
+    to right,
+    var(--color-slider-fill) 0%,
+    var(--color-slider-fill) var(--range-fill),
+    var(--color-bg-hover) var(--range-fill),
+    var(--color-bg-hover) 100%
+  );
   outline: none;
 }
 
@@ -136,6 +150,15 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 12px;
   height: 12px;
+  border-radius: 50%;
+  background: var(--color-fg-primary);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
   border-radius: 50%;
   background: var(--color-fg-primary);
   cursor: pointer;

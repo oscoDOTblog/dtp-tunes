@@ -66,6 +66,8 @@ export interface Playlist {
   duration: number;
   createdAt: string;
   updatedAt: string;
+  coverArtIds?: string[];
+  containsSong?: boolean | null;
 }
 
 export interface SearchResult {

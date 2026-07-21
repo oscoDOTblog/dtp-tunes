@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { KeyRound, RefreshCcw, Trash2, UserPlus, Copy, Check } from "lucide-react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { KeyRound, Loader2, RefreshCcw, Trash2, UserPlus, Copy, Check } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useFetch } from "@/lib/useFetch";
 import { api, ApiError } from "@/lib/api";
@@ -193,9 +193,20 @@ function AdminUsersSection() {
   );
 }
 
+const SCAN_POLL_INTERVAL_MS = 2000;
+
 function AdminScanSection() {
   const { data: jobs, refetch } = useFetch<ScanJob[]>("/api/admin/scan-jobs");
   const latest = jobs?.[0];
+  const scanning = latest?.status === "pending" || latest?.status === "running";
+
+  // Poll while a scan is active so counts and status update live.
+  useEffect(() => {
+    if (!scanning) return;
+    const interval = setInterval(refetch, SCAN_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanning]);
 
   async function triggerScan() {
     await api.post("/api/admin/scan-jobs");
@@ -208,13 +219,18 @@ function AdminScanSection() {
       <p className="text-sm text-fg-secondary">
         Scans the mounted <code>/music</code> folder for new, changed, and removed files.
       </p>
-      <Button onClick={triggerScan} className="w-fit">
-        <RefreshCcw size={16} /> Start scan now
+      <Button onClick={triggerScan} className="w-fit" disabled={scanning}>
+        <RefreshCcw size={16} className={scanning ? "animate-spin" : undefined} />
+        {scanning ? "Scanning…" : "Start scan now"}
       </Button>
       {latest && (
         <div className="rounded-lg bg-bg-elevated p-4 text-sm text-fg-secondary">
-          <p>
-            Status: <span className="text-fg-primary">{latest.status}</span>
+          <p className="flex items-center gap-2">
+            Status:{" "}
+            <span className={scanning ? "flex items-center gap-2 text-accent" : "text-fg-primary"}>
+              {scanning && <Loader2 size={14} className="animate-spin" aria-hidden />}
+              {latest.status}
+            </span>
           </p>
           <p>Scanned: {latest.scannedCount} · Added: {latest.addedCount} · Updated: {latest.updatedCount} · Removed: {latest.removedCount}</p>
           {latest.lastError && <p className="text-danger">Error: {latest.lastError}</p>}

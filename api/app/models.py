@@ -123,6 +123,8 @@ class PlaylistOut(CamelModel):
     duration: int
     createdAt: datetime
     updatedAt: datetime
+    coverArtIds: list[str] = Field(default_factory=list)
+    containsSong: bool | None = None
 
 
 class PlaylistCreate(CamelModel):

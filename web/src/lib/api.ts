@@ -25,7 +25,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let message = response.statusText;
     try {
       const body = await response.json();
-      message = body.detail ?? message;
+      message = detailMessage(body.detail, message);
     } catch {
       // no JSON body
     }
@@ -36,6 +36,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+function detailMessage(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0];
+    if (typeof first === "string") return first;
+    if (first && typeof first === "object" && "msg" in first) {
+      return String((first as { msg: unknown }).msg);
+    }
+  }
+  return fallback;
 }
 
 export const api = {

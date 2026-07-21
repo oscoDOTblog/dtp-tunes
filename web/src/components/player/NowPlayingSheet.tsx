@@ -7,6 +7,7 @@ import { coverUrl } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { seekTo } from "@/lib/audioController";
 import { IconButton } from "@/components/ui/IconButton";
+import { Slider } from "@/components/ui/Slider";
 import { cn } from "@/lib/utils";
 
 export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -46,8 +47,7 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
         </div>
 
         <div className="w-full max-w-sm">
-          <input
-            type="range"
+          <Slider
             min={0}
             max={duration || 0}
             value={Math.min(currentTime, duration || 0)}
@@ -57,6 +57,7 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
               seekTo(value);
             }}
             className="w-full"
+            aria-label="Seek"
           />
           <div className="mt-1 flex justify-between text-xs text-fg-muted">
             <span>{formatDuration(currentTime)}</span>

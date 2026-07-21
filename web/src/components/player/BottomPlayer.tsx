@@ -21,6 +21,7 @@ import { coverUrl, api } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { seekTo } from "@/lib/audioController";
 import { IconButton } from "@/components/ui/IconButton";
+import { Slider } from "@/components/ui/Slider";
 import { NowPlayingSheet } from "./NowPlayingSheet";
 
 export function BottomPlayer() {
@@ -108,8 +109,7 @@ export function BottomPlayer() {
           </div>
           <div className="hidden w-full max-w-lg items-center gap-2 sm:flex">
             <span className="w-10 text-right text-xs text-fg-muted">{formatDuration(currentTime)}</span>
-            <input
-              type="range"
+            <Slider
               min={0}
               max={duration || 0}
               value={Math.min(currentTime, duration || 0)}
@@ -119,6 +119,7 @@ export function BottomPlayer() {
                 seekTo(value);
               }}
               className="flex-1"
+              aria-label="Seek"
             />
             <span className="w-10 text-xs text-fg-muted">{formatDuration(duration)}</span>
           </div>
@@ -133,14 +134,14 @@ export function BottomPlayer() {
           <IconButton size="sm" onClick={toggleMute} aria-label="Mute">
             {muted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </IconButton>
-          <input
-            type="range"
+          <Slider
             min={0}
             max={1}
             step={0.01}
             value={muted ? 0 : volume}
             onChange={(e) => setVolume(Number(e.target.value))}
             className="w-20"
+            aria-label="Volume"
           />
         </div>
       </footer>

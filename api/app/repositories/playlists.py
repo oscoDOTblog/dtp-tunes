@@ -28,8 +28,13 @@ async def get_playlist(db: AsyncIOMotorDatabase, playlist_id: str) -> dict | Non
     return await db.playlists.find_one({"_id": playlist_id})
 
 
-async def list_playlists_for_user(db: AsyncIOMotorDatabase, user_id: str) -> list[dict]:
-    return await db.playlists.find({"$or": [{"ownerId": user_id}, {"public": True}]}).sort("name", 1).to_list(length=10000)
+async def list_playlists_for_user(
+    db: AsyncIOMotorDatabase, user_id: str, *, sort: str = "name"
+) -> list[dict]:
+    cursor = db.playlists.find({"$or": [{"ownerId": user_id}, {"public": True}]})
+    if sort == "recent":
+        return await cursor.sort("updatedAt", -1).to_list(length=10000)
+    return await cursor.sort("name", 1).to_list(length=10000)
 
 
 async def update_playlist_meta(

@@ -52,7 +52,7 @@ services:
       MUSIC_PATH: /music
       CACHE_PATH: /cache
     volumes:
-      - ./music:/music:ro
+      - "${MUSIC_HOST_PATH:-./music}:/music:ro"
       - ./cache:/cache
     depends_on:
       mongodb:
@@ -76,7 +76,7 @@ services:
       MUSIC_PATH: /music
       CACHE_PATH: /cache
     volumes:
-      - ./music:/music:ro
+      - "${MUSIC_HOST_PATH:-./music}:/music:ro"
       - ./cache:/cache
     depends_on:
       mongodb:
