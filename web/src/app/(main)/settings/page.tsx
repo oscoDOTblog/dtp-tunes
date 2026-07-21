@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { KeyRound, Loader2, RefreshCcw, Trash2, UserPlus, Copy, Check } from "lucide-react";
+import { KeyRound, Loader2, RefreshCcw, Trash2, UserPlus, Copy, Check, DatabaseZap } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useFetch } from "@/lib/useFetch";
 import { api, ApiError } from "@/lib/api";
@@ -199,6 +199,9 @@ function AdminScanSection() {
   const { data: jobs, refetch } = useFetch<ScanJob[]>("/api/admin/scan-jobs");
   const latest = jobs?.[0];
   const scanning = latest?.status === "pending" || latest?.status === "running";
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   // Poll while a scan is active so counts and status update live.
   useEffect(() => {
@@ -213,13 +216,43 @@ function AdminScanSection() {
     refetch();
   }
 
+  async function resetLibrary() {
+    const confirmed = window.confirm(
+      "Reset the library database?\n\nThis deletes all artists, albums, songs, genres, stars, play history, and cover cache. Playlists are emptied. Users and API keys are kept. A fresh scan will start immediately.",
+    );
+    if (!confirmed) return;
+
+    setResetting(true);
+    setResetMessage(null);
+    setResetError(null);
+    try {
+      const result = await api.post<{
+        songs: number;
+        albums: number;
+        artists: number;
+        coversCleared: number;
+        rescanEnqueued: boolean;
+      }>("/api/admin/reset-library?rescan=true");
+      setResetMessage(
+        `Cleared ${result.artists} artists, ${result.albums} albums, ${result.songs} songs` +
+          (result.coversCleared ? `, ${result.coversCleared} covers` : "") +
+          (result.rescanEnqueued ? ". Rescan started." : "."),
+      );
+      refetch();
+    } catch (err) {
+      setResetError(err instanceof ApiError ? err.message : "Failed to reset library");
+    } finally {
+      setResetting(false);
+    }
+  }
+
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold text-fg-primary">Library scan</h2>
       <p className="text-sm text-fg-secondary">
         Scans the mounted <code>/music</code> folder for new, changed, and removed files.
       </p>
-      <Button onClick={triggerScan} className="w-fit" disabled={scanning}>
+      <Button onClick={triggerScan} className="w-fit" disabled={scanning || resetting}>
         <RefreshCcw size={16} className={scanning ? "animate-spin" : undefined} />
         {scanning ? "Scanning…" : "Start scan now"}
       </Button>
@@ -236,6 +269,25 @@ function AdminScanSection() {
           {latest.lastError && <p className="text-danger">Error: {latest.lastError}</p>}
         </div>
       )}
+
+      <div className="mt-2 flex flex-col gap-3 rounded-lg border border-danger/40 bg-bg-elevated p-4">
+        <h3 className="text-sm font-semibold text-fg-primary">Reset library database</h3>
+        <p className="text-sm text-fg-secondary">
+          Wipe scanned catalog metadata after remounting a different music folder. Does not delete
+          users, sessions, or API keys. Playlist song lists are emptied.
+        </p>
+        <Button
+          variant="outline"
+          className="w-fit border-danger/60 text-danger hover:border-danger hover:bg-danger/10"
+          onClick={resetLibrary}
+          disabled={resetting || scanning}
+        >
+          {resetting ? <Loader2 size={16} className="animate-spin" /> : <DatabaseZap size={16} />}
+          {resetting ? "Resetting…" : "Reset library DB"}
+        </Button>
+        {resetMessage && <p className="text-sm text-fg-primary">{resetMessage}</p>}
+        {resetError && <p className="text-sm text-danger">{resetError}</p>}
+      </div>
     </section>
   );
 }

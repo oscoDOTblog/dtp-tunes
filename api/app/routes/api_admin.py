@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.deps import get_db, require_admin, require_user
-from app.models import ApiKeyCreate, ApiKeyCreated, ApiKeyOut, ScanJobOut, ScanJobStatus, UserCreate, UserOut
+from app.models import (
+    ApiKeyCreate,
+    ApiKeyCreated,
+    ApiKeyOut,
+    LibraryResetOut,
+    ScanJobOut,
+    ScanJobStatus,
+    UserCreate,
+    UserOut,
+)
 from app.repositories import api_keys as api_keys_repo
+from app.repositories import catalog as catalog_repo
 from app.repositories import scan_jobs as scan_jobs_repo
 from app.repositories import users as users_repo
 from app.services import auth_service
+from app.worker.artwork import clear_cover_cache
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 keys_router = APIRouter(prefix="/api/api-keys", tags=["api-keys"])
@@ -74,6 +85,31 @@ async def list_scan_jobs(db: AsyncIOMotorDatabase = Depends(get_db), _: dict = D
 async def trigger_scan(db: AsyncIOMotorDatabase = Depends(get_db), admin: dict = Depends(require_admin)) -> ScanJobOut:
     doc = await scan_jobs_repo.enqueue_scan(db, triggered_by=admin["_id"])
     return _scan_job_out(doc)
+
+
+@router.post("/reset-library", response_model=LibraryResetOut)
+async def reset_library(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    admin: dict = Depends(require_admin),
+    rescan: bool = Query(True, description="Enqueue a fresh library scan after wiping catalog metadata"),
+) -> LibraryResetOut:
+    """Wipe scanned catalog metadata so a remount can rebuild cleanly.
+
+    Keeps users, sessions, and API keys. Clears stars / play history / queues,
+    empties playlist song lists, deletes cover cache files, and optionally
+    enqueues a new scan.
+    """
+    counts = await catalog_repo.reset_library_catalog(db)
+    covers_cleared = clear_cover_cache()
+    scan_job = None
+    if rescan:
+        scan_job = await scan_jobs_repo.enqueue_scan(db, triggered_by=f"reset:{admin['_id']}")
+    return LibraryResetOut(
+        **counts,
+        coversCleared=covers_cleared,
+        rescanEnqueued=scan_job is not None,
+        scanJob=_scan_job_out(scan_job) if scan_job else None,
+    )
 
 
 @keys_router.get("", response_model=list[ApiKeyOut])

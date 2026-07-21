@@ -191,3 +191,18 @@ class HealthOut(CamelModel):
     status: Literal["ok", "degraded"]
     mongodb: bool
     version: str
+
+
+class LibraryResetOut(CamelModel):
+    songs: int = 0
+    albums: int = 0
+    artists: int = 0
+    genres: int = 0
+    stars: int = 0
+    playHistory: int = 0
+    playQueues: int = 0
+    scanJobs: int = 0
+    playlistsCleared: int = 0
+    coversCleared: int = 0
+    rescanEnqueued: bool = False
+    scanJob: ScanJobOut | None = None

@@ -50,9 +50,60 @@ async def set_artist_cover(db: AsyncIOMotorDatabase, artist_id: str, cover_art_i
     )
 
 
+async def sync_artist_album_counts(db: AsyncIOMotorDatabase) -> None:
+    """Recompute albumCount for every artist from current albums (after deletions)."""
+    counts = await db.albums.aggregate(
+        [{"$match": {"artistId": {"$ne": None}}}, {"$group": {"_id": "$artistId", "count": {"$sum": 1}}}]
+    ).to_list(length=100000)
+    count_by_id = {row["_id"]: row["count"] for row in counts}
+    artists = await db.artists.find({}, {"_id": 1}).to_list(length=100000)
+    for artist in artists:
+        await db.artists.update_one(
+            {"_id": artist["_id"]},
+            {"$set": {"albumCount": count_by_id.get(artist["_id"], 0)}},
+        )
+
+
 async def delete_orphan_artists(db: AsyncIOMotorDatabase) -> int:
+    """Delete artists with no remaining albums.
+
+    Recounts first so stale albumCount values (left behind when orphan albums
+    were removed) do not keep empty artists visible in the library.
+    """
+    await sync_artist_album_counts(db)
     result = await db.artists.delete_many({"albumCount": 0})
     return result.deleted_count
+
+
+async def reset_library_catalog(db: AsyncIOMotorDatabase) -> dict[str, int]:
+    """Wipe scanned library metadata and play-state that references it.
+
+    Preserves users, sessions, and API keys. Clears playlist song membership
+    (playlists themselves are kept empty) so remounts start clean.
+    """
+    songs = await db.songs.delete_many({})
+    albums = await db.albums.delete_many({})
+    artists = await db.artists.delete_many({})
+    genres = await db.genres.delete_many({})
+    stars = await db.stars.delete_many({})
+    play_history = await db.playHistory.delete_many({})
+    play_queues = await db.playQueues.delete_many({})
+    scan_jobs = await db.scanJobs.delete_many({})
+    playlists_cleared = await db.playlists.update_many(
+        {},
+        {"$set": {"songIds": [], "updatedAt": utcnow()}},
+    )
+    return {
+        "songs": songs.deleted_count,
+        "albums": albums.deleted_count,
+        "artists": artists.deleted_count,
+        "genres": genres.deleted_count,
+        "stars": stars.deleted_count,
+        "playHistory": play_history.deleted_count,
+        "playQueues": play_queues.deleted_count,
+        "scanJobs": scan_jobs.deleted_count,
+        "playlistsCleared": playlists_cleared.modified_count,
+    }
 
 
 # --------------------------------------------------------------------------
