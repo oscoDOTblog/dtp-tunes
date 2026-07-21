@@ -46,17 +46,16 @@ services:
       ]
     env_file:
       - .env
-    # MONGODB_URI / MONGODB_DB / MONGODB_COLLECTION_PREFIX come from .env
-    # (defaults to the bundled mongodb service; point at Atlas by editing .env).
+    # MONGODB_URI / MONGODB_DB / MONGODB_COLLECTION_PREFIX come from .env.
+    # Defaults to an external MongoDB (e.g. Atlas). To use the bundled mongodb
+    # service instead, enable the "bundled-db" profile and set
+    # MONGODB_URI=mongodb://mongodb:27017 in .env.
     environment:
       MUSIC_PATH: /music
       CACHE_PATH: /cache
     volumes:
       - "${MUSIC_HOST_PATH:-./music}:/music:ro"
       - ./cache:/cache
-    depends_on:
-      mongodb:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 10s
@@ -79,14 +78,19 @@ services:
       - "${MUSIC_HOST_PATH:-./music}:/music:ro"
       - ./cache:/cache
     depends_on:
-      mongodb:
-        condition: service_healthy
       api:
         condition: service_healthy
     restart: unless-stopped
 
+  # Optional bundled MongoDB for local/x86 hosts.
+  # Disabled by default so external MONGODB_URI (e.g. Atlas) is used as-is.
+  # Enable only when you want a local metadata store:
+  #   docker compose --profile bundled-db up -d
+  #   (and set MONGODB_URI=mongodb://mongodb:27017 in .env)
+  # NOTE: mongo:5+ requires ARMv8.2-A and will NOT run on Raspberry Pi 4.
   mongodb:
     image: mongo:7
+    profiles: ["bundled-db"]
     volumes:
       - mongodb-data:/data/db
     healthcheck:
