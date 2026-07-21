@@ -1,0 +1,52 @@
+# Production overlay: attach the dtp-tunes gateway to Runtipi's Traefik network
+# and expose it on a public custom domain with Let's Encrypt.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.runtipi.yml up -d --build
+#
+# Requires in .env:
+#   DTP_TUNES_DOMAIN=music.example.com
+#
+# Prerequisites:
+#   - Runtipi running (owns host ports 80/443)
+#   - DNS A record for DTP_TUNES_DOMAIN → public IP
+#   - Docker network runtipi_tipi_main_network exists
+#   - See docs/RUNTIPI_DEPLOYMENT.md
+
+services:
+  gateway:
+    networks:
+      - default
+      - runtipi
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=runtipi_tipi_main_network
+      - traefik.http.middlewares.dtp-tunes-https-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.dtp-tunes-https-redirect.redirectscheme.permanent=true
+      - traefik.http.services.dtp-tunes.loadbalancer.server.port=80
+      - traefik.http.services.dtp-tunes.loadbalancer.passhostheader=true
+      # HTTP → HTTPS
+      - traefik.http.routers.dtp-tunes-http.rule=Host(`${DTP_TUNES_DOMAIN}`)
+      - traefik.http.routers.dtp-tunes-http.entrypoints=web
+      - traefik.http.routers.dtp-tunes-http.middlewares=dtp-tunes-https-redirect
+      - traefik.http.routers.dtp-tunes-http.service=dtp-tunes
+      # HTTPS (Let's Encrypt via Runtipi's myresolver)
+      - traefik.http.routers.dtp-tunes.rule=Host(`${DTP_TUNES_DOMAIN}`)
+      - traefik.http.routers.dtp-tunes.entrypoints=websecure
+      - traefik.http.routers.dtp-tunes.tls=true
+      - traefik.http.routers.dtp-tunes.tls.certresolver=myresolver
+      - traefik.http.routers.dtp-tunes.service=dtp-tunes
+      # Do NOT attach Runtipi forward-auth — Subsonic clients cannot complete it.
+      # dtp-tunes owns its own auth (cookie sessions + OpenSubsonic credentials).
+
+  api:
+    # Overlay derives public URL / CORS from the Traefik hostname so .env
+    # localhost defaults do not leak into production.
+    environment:
+      APP_PUBLIC_URL: https://${DTP_TUNES_DOMAIN}
+      CORS_ORIGINS: https://${DTP_TUNES_DOMAIN}
+
+networks:
+  runtipi:
+    external: true
+    name: runtipi_tipi_main_network

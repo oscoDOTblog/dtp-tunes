@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: #0a0a0c;
+  --color-bg-elevated: #121214;
+  --color-bg-elevated-2: #181819;
+  --color-bg-hover: #1f1f22;
+  --color-border-subtle: #232326;
+
+  --color-fg-primary: #f5f5f7;
+  --color-fg-secondary: #a3a3ab;
+  --color-fg-muted: #6b6b73;
+
+  /* Accent defaults to hot pink; overridden by html[data-accent] tones below. */
+  --color-accent: #ff1493;
+  --color-accent-hover: #ff47ab;
+  --color-accent-muted: #a50c60;
+  --color-accent-soft: #2b0f1f;
+
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+
+  /* Filled portion of range sliders (seek bar, volume) */
+  --color-slider-fill: #ffffff;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+/* Accent tones — selectable in Settings, persisted in localStorage. */
+html[data-accent="green"] {
+  --color-accent: #1db954;
+  --color-accent-hover: #1ed760;
+  --color-accent-muted: #0f6b32;
+  --color-accent-soft: #10251a;
+}
+
+html[data-accent="blue"] {
+  --color-accent: #3b82f6;
+  --color-accent-hover: #60a5fa;
+  --color-accent-muted: #1d4ed8;
+  --color-accent-soft: #0f1a2b;
+}
+
+html[data-accent="purple"] {
+  --color-accent: #a855f7;
+  --color-accent-hover: #c084fc;
+  --color-accent-muted: #7e22ce;
+  --color-accent-soft: #1e102b;
+}
+
+html[data-accent="orange"] {
+  --color-accent: #f97316;
+  --color-accent-hover: #fb923c;
+  --color-accent-muted: #c2410c;
+  --color-accent-soft: #2b190f;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg-base: #f7f5f7;
+    --color-bg-elevated: #ffffff;
+    --color-bg-elevated-2: #f0eef1;
+    --color-bg-hover: #ece9ec;
+    --color-border-subtle: #e3e0e3;
+    --color-fg-primary: #17161a;
+    --color-fg-secondary: #55535c;
+    --color-fg-muted: #8b8892;
+    --color-accent-soft: #fce4f1;
+    /* White fill would vanish on light tracks — use the primary fg instead. */
+    --color-slider-fill: #17161a;
+  }
+
+  html[data-accent="green"] {
+    --color-accent-soft: #e3f8eb;
+  }
+
+  html[data-accent="blue"] {
+    --color-accent-soft: #e4edfc;
+  }
+
+  html[data-accent="purple"] {
+    --color-accent-soft: #f1e6fc;
+  }
+
+  html[data-accent="orange"] {
+    --color-accent-soft: #fcece1;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--color-bg-base);
+  color: var(--color-fg-primary);
+  font-family: var(--font-sans);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-bg-hover);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-subtle);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  /* Filled portion (set as --range-fill by the Slider component) renders in
+     bright white on top of the muted track, Spotify-style. */
+  --range-fill: 0%;
+  background: linear-gradient(
+    to right,
+    var(--color-slider-fill) 0%,
+    var(--color-slider-fill) var(--range-fill),
+    var(--color-bg-hover) var(--range-fill),
+    var(--color-bg-hover) 100%
+  );
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-fg-primary);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-fg-primary);
+  cursor: pointer;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
