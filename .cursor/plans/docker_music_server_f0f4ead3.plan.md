@@ -4,19 +4,19 @@ overview: Build a self-hosted music server with a Next.js Spotify-inspired web p
 todos:
   - id: foundation
     content: Scaffold the Next.js frontend, FastAPI backend, COSS/Tailwind, MongoDB, Docker services, configuration validation, and documentation skeleton.
-    status: pending
+    status: completed
   - id: catalog-worker
     content: Implement Mongo models/repositories and the leased filesystem metadata/artwork scanner.
-    status: pending
+    status: completed
   - id: protocol-api
     content: Implement authentication, OpenSubsonic endpoint adapters, range streaming, cover art, and bounded FFmpeg transcoding with contract tests.
-    status: pending
+    status: completed
   - id: spotify-ui
     content: Build the responsive Spotify-inspired application shell, catalog screens, persistent queue, native audio player, and admin settings.
-    status: pending
+    status: completed
   - id: release-verification
     content: Complete Docker hardening, integration/E2E tests, compatibility matrix, setup docs, and V1 limitations.
-    status: pending
+    status: completed
 isProject: false
 ---
 

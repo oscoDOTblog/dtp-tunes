@@ -1,0 +1,101 @@
+services:
+  gateway:
+    image: nginx:1.27-alpine
+    # Loopback-only diagnostic port — not reachable from LAN/WAN.
+    # Public access in production goes through Runtipi Traefik (see docker-compose.runtipi.yml).
+    ports:
+      - "127.0.0.1:${LOCAL_PORT:-8080}:80"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - default
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      NEXT_PUBLIC_API_BASE: ""
+      API_INTERNAL_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    # Trust X-Forwarded-* from the private gateway only (API has no host ports).
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--proxy-headers",
+        "--forwarded-allow-ips=*",
+      ]
+    env_file:
+      - .env
+    # MONGODB_URI / MONGODB_DB / MONGODB_COLLECTION_PREFIX come from .env
+    # (defaults to the bundled mongodb service; point at Atlas by editing .env).
+    environment:
+      MUSIC_PATH: /music
+      CACHE_PATH: /cache
+    volumes:
+      - ./music:/music:ro
+      - ./cache:/cache
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.worker.main"]
+    env_file:
+      - .env
+    environment:
+      MUSIC_PATH: /music
+      CACHE_PATH: /cache
+    volumes:
+      - ./music:/music:ro
+      - ./cache:/cache
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  mongodb-data:
