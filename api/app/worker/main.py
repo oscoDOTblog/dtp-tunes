@@ -42,9 +42,10 @@ async def _worker_loop() -> None:
         if job:
             logger.info("Leased scan job %s", job["_id"])
             try:
-                await run_scan_job(db, job["_id"])
+                await run_scan_job(db, job["_id"], owner=_OWNER)
             except Exception:  # noqa: BLE001
                 logger.exception("Scan job %s crashed", job["_id"])
+                await scan_jobs_repo.complete_job(db, job["_id"], status="failed", last_error="worker crashed")
         else:
             now = loop.time()
             if now - last_periodic_enqueue > settings.scan_interval_seconds:

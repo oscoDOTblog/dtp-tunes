@@ -39,7 +39,7 @@ def _iter_audio_files(music_root: str):
             yield absolute
 
 
-async def run_scan_job(db: AsyncIOMotorDatabase, job_id: str) -> None:
+async def run_scan_job(db: AsyncIOMotorDatabase, job_id: str, *, owner: str) -> None:
     settings = get_settings()
     music_root = settings.music_path
 
@@ -49,6 +49,7 @@ async def run_scan_job(db: AsyncIOMotorDatabase, job_id: str) -> None:
         return
 
     seen_paths: set[str] = set()
+    logger.info("Scan job %s walking %s (owner=%s)", job_id, music_root, owner)
 
     try:
         for absolute_path in _iter_audio_files(music_root):
@@ -59,7 +60,7 @@ async def run_scan_job(db: AsyncIOMotorDatabase, job_id: str) -> None:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Failed to scan %s: %s", relative_path, exc)
                 await scan_jobs_repo.update_progress(db, job_id, errorCount=1)
-            await scan_jobs_repo.renew_lease(db, job_id, owner=os.environ.get("HOSTNAME", "worker"))
+            await scan_jobs_repo.renew_lease(db, job_id, owner=owner)
 
         existing_paths = await catalog_repo.all_song_paths(db)
         missing_paths = list(existing_paths - seen_paths)
@@ -75,7 +76,12 @@ async def run_scan_job(db: AsyncIOMotorDatabase, job_id: str) -> None:
             await scan_jobs_repo.update_progress(db, job_id, removedCount=len(missing_paths))
 
         await scan_jobs_repo.complete_job(db, job_id, status="completed")
-        logger.info("Scan job %s completed", job_id)
+        logger.info(
+            "Scan job %s completed (seen=%s, removed=%s)",
+            job_id,
+            len(seen_paths),
+            len(missing_paths),
+        )
     except Exception as exc:  # noqa: BLE001
         logger.exception("Scan job %s failed", job_id)
         await scan_jobs_repo.complete_job(db, job_id, status="failed", last_error=str(exc))
@@ -109,6 +115,7 @@ async def _scan_one_file(
 
     tags: ExtractedTags | None = extract_tags(absolute_path)
     if tags is None:
+        logger.warning("Skipping unreadable/unparseable audio file: %s", relative_path)
         await scan_jobs_repo.update_progress(db, job_id, scannedCount=1, errorCount=1)
         return
 

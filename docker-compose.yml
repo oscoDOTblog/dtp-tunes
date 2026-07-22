@@ -32,6 +32,9 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
+    # Match host/NAS file ownership when the bind-mounted library is not
+    # world-readable (default container user is uid/gid 1001).
+    user: "${PUID:-1001}:${PGID:-1001}"
     # Trust X-Forwarded-* from the private gateway only (API has no host ports).
     command:
       [
@@ -68,6 +71,7 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
+    user: "${PUID:-1001}:${PGID:-1001}"
     command: ["python", "-m", "app.worker.main"]
     env_file:
       - .env

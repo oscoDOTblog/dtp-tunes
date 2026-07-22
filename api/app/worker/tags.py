@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 
@@ -63,9 +64,15 @@ def extract_tags(absolute_path: str) -> ExtractedTags | None:
     """Returns None if the file can't be parsed as audio (skips it safely)."""
     try:
         audio = MutagenFile(absolute_path)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger("dtp_tunes.worker.tags").warning(
+            "mutagen failed for %s: %s", absolute_path, exc
+        )
         return None
     if audio is None:
+        logging.getLogger("dtp_tunes.worker.tags").warning(
+            "mutagen returned None for %s (unreadable or unsupported)", absolute_path
+        )
         return None
 
     tags = audio.tags or {}
