@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { KeyRound, Loader2, RefreshCcw, Trash2, UserPlus, Copy, Check, DatabaseZap } from "lucide-react";
+import { KeyRound, Loader2, RefreshCcw, Trash2, UserPlus, Copy, Check, DatabaseZap, Eye, EyeOff, RotateCw } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useFetch } from "@/lib/useFetch";
 import { api, ApiError } from "@/lib/api";
@@ -53,6 +53,107 @@ function AppearanceSection() {
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function SubsonicPasswordSection() {
+  const { user } = useAuth();
+  const [password, setPassword] = useState<string | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  async function reveal() {
+    setLoading(true);
+    setError(null);
+    setNote(null);
+    try {
+      const result = await api.get<{ username: string; password: string }>("/api/auth/subsonic-password");
+      setPassword(result.password);
+      setVisible(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to reveal Subsonic password");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function rotate() {
+    const confirmed = window.confirm(
+      "Rotate your Subsonic client password?\n\nExisting Subsonic / OpenSubsonic clients will stop working until you update them with the new password. Your web login password is unchanged.",
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError(null);
+    setNote(null);
+    try {
+      const result = await api.post<{ username: string; password: string }>("/api/auth/subsonic-password/rotate");
+      setPassword(result.password);
+      setVisible(true);
+      setNote("New Subsonic password generated. Update your clients now.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to rotate Subsonic password");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="text-lg font-semibold text-fg-primary">Subsonic client password</h2>
+      <p className="text-sm text-fg-secondary">
+        Most Subsonic apps (DSub, Symfonium, Amperfy, etc.) need your <strong className="font-medium text-fg-primary">web
+        username</strong> plus this separate client password — not your web login password.
+        {user?.username ? (
+          <>
+            {" "}
+            Your username is <code className="text-fg-primary">{user.username}</code>.
+          </>
+        ) : null}
+      </p>
+
+      {password && (
+        <div className="flex items-center gap-2 rounded-lg bg-accent-soft p-3 text-sm text-fg-primary">
+          <code className="flex-1 break-all">{visible ? password : "••••••••••••••••••••••••"}</code>
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? "Hide password" : "Show password"}
+            className="text-fg-secondary hover:text-fg-primary"
+          >
+            {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(password);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            aria-label="Copy password"
+            className="text-fg-secondary hover:text-fg-primary"
+          >
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={reveal} disabled={loading} variant="secondary">
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+          {password ? "Refresh" : "Reveal password"}
+        </Button>
+        <Button onClick={rotate} disabled={loading} variant="outline">
+          <RotateCw size={16} />
+          Rotate
+        </Button>
+      </div>
+      {note && <p className="text-sm text-fg-primary">{note}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </section>
   );
 }
@@ -299,6 +400,8 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-10 p-6 pb-32">
       <h1 className="text-2xl font-bold text-fg-primary">Settings</h1>
       <AppearanceSection />
+      <hr className="border-border-subtle" />
+      <SubsonicPasswordSection />
       <hr className="border-border-subtle" />
       <ApiKeysSection />
       {user?.role === "admin" && (

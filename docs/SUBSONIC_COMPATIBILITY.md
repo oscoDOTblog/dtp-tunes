@@ -50,6 +50,11 @@ outside a trusted LAN — token/salt still exposes the compatibility secret
 to offline brute force if intercepted, and legacy password mode sends it
 close to directly.
 
+In the web UI, **Settings → Subsonic client password** lets you reveal or
+rotate your compatibility secret. Use your web username plus that password
+in classic Subsonic clients. Clients that support OpenSubsonic API keys
+should use **Settings → Subsonic API keys** instead.
+
 ## Endpoint coverage
 
 ### System

@@ -64,5 +64,12 @@ async def set_role(db: AsyncIOMotorDatabase, user_id: str, role: str) -> None:
     await db.users.update_one({"_id": user_id}, {"$set": {"role": role, "updatedAt": utcnow()}})
 
 
+async def set_subsonic_secret(db: AsyncIOMotorDatabase, user_id: str, subsonic_secret_encrypted: dict) -> None:
+    await db.users.update_one(
+        {"_id": user_id},
+        {"$set": {"subsonicSecretEncrypted": subsonic_secret_encrypted, "updatedAt": utcnow()}},
+    )
+
+
 async def delete_user(db: AsyncIOMotorDatabase, user_id: str) -> None:
     await db.users.delete_one({"_id": user_id})

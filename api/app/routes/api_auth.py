@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.config import Settings, get_settings
 from app.deps import get_db, require_user
-from app.models import LoginRequest, UserOut
+from app.models import LoginRequest, SubsonicPasswordOut, UserOut
 from app.repositories import sessions as sessions_repo
 from app.security import new_session_token
 from app.services import auth_service
@@ -80,3 +80,26 @@ async def logout(
 @router.get("/me", response_model=UserOut)
 async def me(user: dict = Depends(require_user)) -> UserOut:
     return _user_out(user)
+
+
+@router.get("/subsonic-password", response_model=SubsonicPasswordOut)
+async def get_subsonic_password(user: dict = Depends(require_user)) -> SubsonicPasswordOut:
+    """Reveal the Subsonic compatibility secret used as the client password."""
+    try:
+        password = auth_service.reveal_subsonic_secret(user)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to decrypt Subsonic password — check APP_ENCRYPTION_KEY",
+        ) from exc
+    return SubsonicPasswordOut(username=user["username"], password=password, rotated=False)
+
+
+@router.post("/subsonic-password/rotate", response_model=SubsonicPasswordOut)
+async def rotate_subsonic_password(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    user: dict = Depends(require_user),
+) -> SubsonicPasswordOut:
+    """Replace the Subsonic compatibility secret (disconnects existing Subsonic clients)."""
+    password = await auth_service.rotate_subsonic_secret(db, user)
+    return SubsonicPasswordOut(username=user["username"], password=password, rotated=True)

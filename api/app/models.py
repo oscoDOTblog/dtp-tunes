@@ -48,6 +48,14 @@ class LoginRequest(CamelModel):
     password: str
 
 
+class SubsonicPasswordOut(CamelModel):
+    """Revealed Subsonic compatibility secret for legacy clients (username + this password)."""
+
+    username: str
+    password: str
+    rotated: bool = False
+
+
 class ApiKeyOut(CamelModel):
     id: str
     keyId: str

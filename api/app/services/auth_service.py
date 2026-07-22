@@ -67,6 +67,20 @@ def _subsonic_secret_of(user: dict) -> str:
     return decrypt_secret(EncryptedSecret.from_doc(user["subsonicSecretEncrypted"]))
 
 
+def reveal_subsonic_secret(user: dict) -> str:
+    """Decrypt the legacy Subsonic client password for the given user."""
+    return _subsonic_secret_of(user)
+
+
+async def rotate_subsonic_secret(db: AsyncIOMotorDatabase, user: dict) -> str:
+    """Issue a new Subsonic compatibility secret; invalidates existing client logins."""
+    plaintext = generate_subsonic_secret()
+    encrypted = encrypt_secret(plaintext)
+    await users_repo.set_subsonic_secret(db, user["_id"], encrypted.to_doc())
+    logger.info("Rotated Subsonic compatibility secret for user %s", user["_id"])
+    return plaintext
+
+
 async def authenticate_subsonic(
     db: AsyncIOMotorDatabase,
     *,
