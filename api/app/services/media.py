@@ -6,7 +6,11 @@ import asyncio
 import logging
 import os
 import re
+import tempfile
+import unicodedata
+import zipfile
 from collections.abc import AsyncIterator
+from urllib.parse import quote
 
 import aiofiles
 from fastapi import HTTPException, Request
@@ -58,14 +62,76 @@ def resolve_music_path(relative_path: str) -> str:
     return candidate
 
 
-async def stream_file_with_range(request: Request, absolute_path: str, content_type: str) -> StreamingResponse:
-    """Serve a file honoring an HTTP Range header (required for audio seeking)."""
+def sanitize_download_filename(name: str, fallback: str = "download") -> str:
+    """Reduce an arbitrary display name to a safe, header-friendly filename."""
+    cleaned = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    cleaned = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", cleaned).strip().strip(".")
+    return cleaned or fallback
+
+
+def content_disposition_attachment(filename: str) -> str:
+    """Build a Content-Disposition value with ASCII + RFC 5987 UTF-8 fallbacks."""
+    ascii_name = sanitize_download_filename(filename)
+    return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(filename)}'
+
+
+def track_filename(title: str, track: int | None, suffix: str, seen: set[str]) -> str:
+    """Unique, filesystem-safe filename for one track inside an album zip."""
+    base = sanitize_download_filename(title or "Unknown Track", "track")
+    prefix = f"{track:02d} - " if track else ""
+    ext = f".{suffix.lower()}" if suffix else ""
+    candidate = f"{prefix}{base}{ext}"
+    if candidate not in seen:
+        seen.add(candidate)
+        return candidate
+    counter = 2
+    while f"{prefix}{base} ({counter}){ext}" in seen:
+        counter += 1
+    candidate = f"{prefix}{base} ({counter}){ext}"
+    seen.add(candidate)
+    return candidate
+
+
+async def build_album_zip(track_paths: list[tuple[str, str]]) -> str:
+    """Zip absolute track paths (paired with in-zip names) into a temp file.
+
+    Returns the temp file path; the caller owns it and must delete it after
+    the response is sent. The blocking zip work runs in a worker thread.
+    """
+
+    def _write() -> str:
+        tmp = tempfile.NamedTemporaryFile(prefix="dtp-tunes-album-", suffix=".zip", delete=False)
+        try:
+            with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_STORED) as archive:
+                for absolute_path, arcname in track_paths:
+                    archive.write(absolute_path, arcname=arcname)
+        finally:
+            tmp.close()
+        return tmp.name
+
+    return await asyncio.to_thread(_write)
+
+
+async def stream_file_with_range(
+    request: Request,
+    absolute_path: str,
+    content_type: str,
+    *,
+    download_filename: str | None = None,
+) -> StreamingResponse:
+    """Serve a file honoring an HTTP Range header (required for audio seeking).
+
+    When download_filename is set, a Content-Disposition: attachment header is
+    added so browsers save the file instead of playing it inline.
+    """
     file_size = os.path.getsize(absolute_path)
     range_header = request.headers.get("range")
 
     start, end = 0, file_size - 1
     status_code = 200
     headers = {"Accept-Ranges": "bytes", "Content-Type": content_type}
+    if download_filename:
+        headers["Content-Disposition"] = content_disposition_attachment(download_filename)
 
     if range_header:
         match = _RANGE_RE.match(range_header)

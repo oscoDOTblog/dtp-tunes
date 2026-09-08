@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Pause, Play, Heart, MoreVertical, ListPlus } from "lucide-react";
+import { Pause, Play, Heart, MoreVertical, ListPlus, Download } from "lucide-react";
 import type { Song } from "@/lib/types";
-import { coverUrl } from "@/lib/api";
+import { coverUrl, downloadFile, songDownloadUrl } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { usePlayerStore } from "@/store/playerStore";
 import { cn } from "@/lib/utils";
 import { ContextMenu, Menu, MenuItem, type ContextMenuPosition } from "@/components/ui/Menu";
 import { SaveToPlaylistDialog } from "@/components/music/SaveToPlaylistDialog";
+import { useToast } from "@/components/ui/ToastProvider";
 
 interface SongRowProps {
   song: Song;
@@ -27,6 +28,8 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const [saveOpen, setSaveOpen] = useState(false);
   const [contextPos, setContextPos] = useState<ContextMenuPosition | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const toast = useToast();
 
   const isCurrent = currentSong?.id === song.id;
 
@@ -38,11 +41,30 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
     }
   }
 
+  async function handleDownload() {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const ext = song.suffix ? `.${song.suffix.toLowerCase()}` : "";
+      await downloadFile(songDownloadUrl(song.id), `${song.title}${ext}`);
+    } catch {
+      toast.error("Failed to download song");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   const menuItems = (
-    <MenuItem onClick={() => setSaveOpen(true)}>
-      <ListPlus size={16} />
-      Save to playlist
-    </MenuItem>
+    <>
+      <MenuItem onClick={() => setSaveOpen(true)}>
+        <ListPlus size={16} />
+        Save to playlist
+      </MenuItem>
+      <MenuItem onClick={handleDownload} disabled={downloading}>
+        <Download size={16} />
+        {downloading ? "Downloading…" : "Download"}
+      </MenuItem>
+    </>
   );
 
   return (

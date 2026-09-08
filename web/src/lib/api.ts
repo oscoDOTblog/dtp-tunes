@@ -65,6 +65,40 @@ export function streamUrl(songId: string): string {
   return `${API_BASE}/api/stream/${songId}`;
 }
 
+export function songDownloadUrl(songId: string): string {
+  return `${API_BASE}/api/download/${songId}`;
+}
+
+export function albumDownloadUrl(albumId: string): string {
+  return `${API_BASE}/api/albums/${albumId}/download`;
+}
+
+/**
+ * Fetch a cookie-authenticated URL and save it as a local file via a
+ * temporary blob object URL. A plain <a href> won't carry the session the
+ * same way across origins, and the blob + download attribute forces the
+ * browser's save dialog instead of inline playback.
+ */
+export async function downloadFile(url: string, filename: string): Promise<void> {
+  const response = await fetch(url, { credentials: "include" });
+  if (!response.ok) {
+    throw new ApiError(response.status, `Download failed: ${response.statusText}`);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    // Revoke after the click has been dispatched so the download survives.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  }
+}
+
 export function coverUrl(coverId: string | null | undefined, size = 300): string {
   if (!coverId) return "/cover-placeholder.svg";
   return `${API_BASE}/api/covers/${coverId}?size=${size}`;
