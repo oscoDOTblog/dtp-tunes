@@ -178,8 +178,17 @@ async def transcode_stream(
     if profile is None:
         raise HTTPException(status_code=400, detail="Unsupported transcode format")
 
+    settings = get_settings()
     semaphore = get_transcode_semaphore()
-    await semaphore.acquire()
+    try:
+        await asyncio.wait_for(semaphore.acquire(), timeout=settings.ffmpeg_queue_timeout_seconds)
+    except asyncio.TimeoutError:
+        logger.warning("Transcode slots busy, rejecting request for %s", absolute_path)
+        raise HTTPException(
+            status_code=503,
+            detail="Server is busy transcoding; try again shortly",
+            headers={"Retry-After": str(settings.ffmpeg_queue_timeout_seconds)},
+        ) from None
 
     args = [
         "ffmpeg",

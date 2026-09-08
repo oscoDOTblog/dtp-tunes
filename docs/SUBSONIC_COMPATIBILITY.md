@@ -104,8 +104,8 @@ should use **Settings → Subsonic API keys** instead.
 
 | Endpoint | Status | Notes |
 | --- | --- | --- |
-| `stream` | ✅ Tested | Byte-range aware; `format=mp3\|opus` triggers bounded live transcoding |
-| `download` | ✅ Tested | Always serves the original file, range-aware |
+| `stream` | ✅ Tested | Byte-range aware; `format=mp3\|opus` triggers bounded live transcoding. When all `FFMPEG_MAX_CONCURRENT` slots are busy, queued requests fail fast with `503` + `Retry-After` after `FFMPEG_QUEUE_TIMEOUT_SECONDS` instead of hanging |
+| `download` | ✅ Tested | Always serves the original file, range-aware, with `Content-Disposition: attachment` |
 | `getCoverArt` | ✅ Tested | Resizes cached album art via `size=` |
 
 ### Explicitly not implemented (V1)

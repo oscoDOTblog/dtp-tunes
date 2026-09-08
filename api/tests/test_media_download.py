@@ -1,6 +1,10 @@
-"""Tests for download filename helpers in the media service (no DB required)."""
+"""Tests for download filename helpers and transcode overload behavior (no DB required)."""
 
 from __future__ import annotations
+
+import pytest
+from fastapi import HTTPException
+from starlette.requests import Request
 
 from app.services import media
 
@@ -31,3 +35,49 @@ def test_track_filename_unique_and_prefixed():
 
 def test_track_filename_without_track_number():
     assert media.track_filename("Song", None, "mp3", set()) == "Song.mp3"
+
+
+def _fake_request() -> Request:
+    scope = {"type": "http", "method": "GET", "headers": [], "query_string": b""}
+    return Request(scope)
+
+
+async def test_stream_with_download_filename_sets_attachment(tmp_path):
+    target = tmp_path / "song.mp3"
+    target.write_bytes(b"0123456789")
+    response = await media.stream_file_with_range(_fake_request(), str(target), "audio/mpeg", download_filename="My Song.mp3")
+    assert response.headers["Content-Disposition"].startswith('attachment; filename="My Song.mp3"')
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    assert body == b"0123456789"
+
+
+async def test_stream_without_download_filename_has_no_disposition(tmp_path):
+    target = tmp_path / "song.mp3"
+    target.write_bytes(b"0123456789")
+    response = await media.stream_file_with_range(_fake_request(), str(target), "audio/mpeg")
+    assert "Content-Disposition" not in response.headers
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    assert body == b"0123456789"
+
+
+async def test_transcode_refuses_when_slots_busy(monkeypatch):
+    class FakeSettings:
+        ffmpeg_max_concurrent = 2
+        ffmpeg_queue_timeout_seconds = 0.05
+
+    monkeypatch.setattr(media, "get_settings", lambda: FakeSettings())
+    semaphore = media.get_transcode_semaphore()
+    # Saturate every permit (settings default is 2, but drain generically).
+    acquired = 0
+    while not semaphore.locked():
+        await semaphore.acquire()
+        acquired += 1
+    try:
+        with pytest.raises(HTTPException) as exc_info:
+            await media.transcode_stream("/nonexistent/song.flac", format_="mp3")
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.headers is not None
+        assert "Retry-After" in exc_info.value.headers
+    finally:
+        for _ in range(acquired):
+            semaphore.release()

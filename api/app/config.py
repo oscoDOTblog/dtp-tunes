@@ -28,6 +28,10 @@ class Settings(BaseSettings):
 
     scan_interval_seconds: int = 300
     ffmpeg_max_concurrent: int = 2
+    # How long a transcode request waits for a free FFmpeg slot before the
+    # server fails fast with 503 (so clients show an error instead of
+    # hanging forever on an unanswered request).
+    ffmpeg_queue_timeout_seconds: int = 30
 
     api_host: str = "0.0.0.0"
     api_port: int = 8000

@@ -18,7 +18,7 @@ from app.repositories import scan_jobs as scan_jobs_repo
 from app.repositories import social as social_repo
 from app.services import auth_service
 from app.services.cover_art import render_cover_art
-from app.services.media import content_type_for, resolve_music_path, stream_file_with_range, transcode_stream
+from app.services.media import content_type_for, resolve_music_path, sanitize_download_filename, stream_file_with_range, transcode_stream
 from app.services.subsonic_entities import (
     album_to_subsonic,
     artist_to_subsonic,
@@ -596,8 +596,12 @@ async def download(request: Request, db: AsyncIOMotorDatabase = Depends(get_db))
     if not song:
         return render_envelope(request, params.as_dict(), error_envelope(SubsonicError.NOT_FOUND, "Song not found"))
     absolute_path = resolve_music_path(song["path"])
-    content_type = content_type_for(song.get("suffix", ""))
-    return await stream_file_with_range(request, absolute_path, content_type)
+    suffix = song.get("suffix", "")
+    content_type = content_type_for(suffix)
+    filename = sanitize_download_filename(song.get("title") or "track", "track")
+    if suffix:
+        filename += f".{suffix.lower()}"
+    return await stream_file_with_range(request, absolute_path, content_type, download_filename=filename)
 
 
 @endpoint("getCoverArt")
