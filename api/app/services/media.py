@@ -58,6 +58,7 @@ def resolve_music_path(relative_path: str) -> str:
     if not (candidate == base or candidate.startswith(base + os.sep)):
         raise HTTPException(status_code=400, detail="Invalid path")
     if not os.path.isfile(candidate):
+        logger.warning("media_file_missing path=%r music_root=%r", candidate, base)
         raise HTTPException(status_code=404, detail="File not found")
     return candidate
 
@@ -134,20 +135,34 @@ async def stream_file_with_range(
         headers["Content-Disposition"] = content_disposition_attachment(download_filename)
 
     if range_header:
-        match = _RANGE_RE.match(range_header)
+        match = _RANGE_RE.fullmatch(range_header)
         if not match:
-            raise HTTPException(status_code=416, detail="Invalid Range header")
+            raise HTTPException(status_code=416, detail="Invalid Range header", headers={"Content-Range": f"bytes */{file_size}"})
         start_str, end_str = match.groups()
-        start = int(start_str) if start_str else 0
-        end = int(end_str) if end_str else file_size - 1
+        if not start_str and not end_str:
+            raise HTTPException(status_code=416, detail="Invalid Range header", headers={"Content-Range": f"bytes */{file_size}"})
+        if not start_str:
+            start = max(0, file_size - int(end_str))
+            end = file_size - 1
+        else:
+            start = int(start_str)
+            end = int(end_str) if end_str else file_size - 1
         end = min(end, file_size - 1)
         if start > end or start >= file_size:
-            raise HTTPException(status_code=416, detail="Range not satisfiable")
+            raise HTTPException(status_code=416, detail="Range not satisfiable", headers={"Content-Range": f"bytes */{file_size}"})
         status_code = 206
         headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
 
     content_length = end - start + 1
     headers["Content-Length"] = str(content_length)
+
+    try:
+        # Probe readability before committing a successful HTTP response.
+        async with aiofiles.open(absolute_path, "rb"):
+            pass
+    except OSError as exc:
+        logger.warning("media_open_failed request_id=%s path=%r error_type=%s errno=%s", getattr(request.state, "transfer_id", "-"), absolute_path, type(exc).__name__, exc.errno)
+        raise HTTPException(status_code=503, detail="Media file unavailable") from None
 
     async def iterator() -> AsyncIterator[bytes]:
         async with aiofiles.open(absolute_path, "rb") as f:

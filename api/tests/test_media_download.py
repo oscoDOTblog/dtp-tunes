@@ -81,3 +81,31 @@ async def test_transcode_refuses_when_slots_busy(monkeypatch):
     finally:
         for _ in range(acquired):
             semaphore.release()
+
+
+@pytest.mark.parametrize("range_value,expected,content_range", [
+    ("bytes=3-", b"3456789", "bytes 3-9/10"),
+    ("bytes=-3", b"789", "bytes 7-9/10"),
+    ("bytes=-30", b"0123456789", "bytes 0-9/10"),
+    ("bytes=2-4", b"234", "bytes 2-4/10"),
+])
+async def test_ranges(tmp_path, range_value, expected, content_range):
+    target = tmp_path / "song.mp3"
+    target.write_bytes(b"0123456789")
+    request = Request({"type": "http", "headers": [(b"range", range_value.encode())]})
+    response = await media.stream_file_with_range(request, str(target), "audio/mpeg")
+    assert response.status_code == 206
+    assert response.headers["content-range"] == content_range
+    assert int(response.headers["content-length"]) == len(expected)
+    assert b"".join([chunk async for chunk in response.body_iterator]) == expected
+
+
+@pytest.mark.parametrize("range_value", ["bytes=-", "bytes=-0", "bytes=10-", "bytes=4-2", "bytes=0-1,4-5", "bytes=0-1junk"])
+async def test_invalid_ranges(tmp_path, range_value):
+    target = tmp_path / "song.mp3"
+    target.write_bytes(b"0123456789")
+    request = Request({"type": "http", "headers": [(b"range", range_value.encode())]})
+    with pytest.raises(HTTPException) as exc:
+        await media.stream_file_with_range(request, str(target), "audio/mpeg")
+    assert exc.value.status_code == 416
+    assert exc.value.headers["Content-Range"] == "bytes */10"

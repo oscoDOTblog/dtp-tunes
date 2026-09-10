@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.db import close_connection, ensure_indexes
 from app.routes import api_admin, api_auth, api_library, api_media, api_player, api_playlists, health, subsonic
 from app.services.auth_service import bootstrap_admin
+from app.services.transfer_logging import TransferLoggingMiddleware
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("dtp_tunes.main")
@@ -32,6 +33,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="dtp-tunes API", version="0.1.0", lifespan=lifespan)
+
+app.add_middleware(TransferLoggingMiddleware)
 
 settings = get_settings()
 app.add_middleware(

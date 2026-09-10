@@ -7,6 +7,8 @@ docs/SUBSONIC_COMPATIBILITY.md for the tested endpoint/client matrix.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -28,6 +30,8 @@ from app.services.subsonic_entities import (
 )
 from app.services.subsonic_format import SubsonicError, error_envelope, ok_envelope, render_envelope
 from app.routes.subsonic_params import SubsonicParams, parse_params
+
+logger = logging.getLogger("dtp_tunes.subsonic")
 
 router = APIRouter(prefix="/rest", tags=["subsonic"])
 
@@ -52,12 +56,14 @@ async def _authenticate(request: Request, db: AsyncIOMotorDatabase, params: Subs
     api_key = params.get("apiKey") or request.headers.get("x-api-key")
 
     if not (username or api_key):
+        logger.warning("auth_failed request_id=%s reason=missing_credentials", getattr(request.state, "transfer_id", "-"))
         return None, render_envelope(request, params.as_dict(), error_envelope(SubsonicError.MISSING_PARAMETER, "Required parameter is missing"))
 
     user = await auth_service.authenticate_subsonic(
         db, username=username, token=token, salt=salt, password=password, api_key=api_key
     )
     if not user:
+        logger.warning("auth_failed request_id=%s reason=wrong_credentials", getattr(request.state, "transfer_id", "-"))
         return None, render_envelope(request, params.as_dict(), error_envelope(SubsonicError.WRONG_CREDENTIALS, "Wrong username or password"))
     return user, None
 
@@ -571,8 +577,10 @@ async def stream(request: Request, db: AsyncIOMotorDatabase = Depends(get_db)):
     if err:
         return err
     song_id = params.get("id")
+    logger.info("media_requested request_id=%s song_id=%r client=%r format=%r range=%r", getattr(request.state, "transfer_id", "-"), song_id, params.get("c"), params.get("format"), request.headers.get("range"))
     song = await catalog_repo.get_song(db, song_id) if song_id else None
     if not song:
+        logger.warning("media_missing request_id=%s reason=song_not_found", getattr(request.state, "transfer_id", "-"))
         return render_envelope(request, params.as_dict(), error_envelope(SubsonicError.NOT_FOUND, "Song not found"))
 
     absolute_path = resolve_music_path(song["path"])
@@ -592,8 +600,10 @@ async def download(request: Request, db: AsyncIOMotorDatabase = Depends(get_db))
     if err:
         return err
     song_id = params.get("id")
+    logger.info("media_requested request_id=%s song_id=%r client=%r format=%r range=%r", getattr(request.state, "transfer_id", "-"), song_id, params.get("c"), params.get("format"), request.headers.get("range"))
     song = await catalog_repo.get_song(db, song_id) if song_id else None
     if not song:
+        logger.warning("media_missing request_id=%s reason=song_not_found", getattr(request.state, "transfer_id", "-"))
         return render_envelope(request, params.as_dict(), error_envelope(SubsonicError.NOT_FOUND, "Song not found"))
     absolute_path = resolve_music_path(song["path"])
     suffix = song.get("suffix", "")
