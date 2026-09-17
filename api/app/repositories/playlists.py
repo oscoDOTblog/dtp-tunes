@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from collections import Counter
+
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.repositories.base import utcnow
 from app.security import new_opaque_id
+
+
+def is_reorder_of(current: list[str], ordered: list[str]) -> bool:
+    """Return whether ordered contains exactly the current playlist entries."""
+    return len(current) == len(ordered) and Counter(current) == Counter(ordered)
 
 
 async def create_playlist(

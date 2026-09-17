@@ -128,9 +128,14 @@ async def update_playlist(
     if not playlist or playlist["ownerId"] != user["_id"]:
         raise HTTPException(status_code=404, detail="Playlist not found")
 
-    await playlists_repo.update_playlist_meta(db, playlist_id, name=body.name, comment=body.comment, public=body.public)
-
     song_ids = list(playlist.get("songIds", []))
+    if body.orderedSongIds is not None:
+        if body.songIndexesToRemove or body.songIdsToAdd:
+            raise HTTPException(status_code=400, detail="Reorder songs separately from adding or removing them")
+        if not playlists_repo.is_reorder_of(song_ids, body.orderedSongIds):
+            raise HTTPException(status_code=409, detail="Playlist songs changed. Reload and try again")
+        song_ids = body.orderedSongIds
+
     if body.songIndexesToRemove:
         remove = set(body.songIndexesToRemove)
         song_ids = [s for i, s in enumerate(song_ids) if i not in remove]
@@ -142,6 +147,7 @@ async def update_playlist(
             raise HTTPException(status_code=409, detail="Song is already in this playlist")
         song_ids.extend(body.songIdsToAdd)
 
+    await playlists_repo.update_playlist_meta(db, playlist_id, name=body.name, comment=body.comment, public=body.public)
     await playlists_repo.replace_songs(db, playlist_id, song_ids)
 
     updated = await playlists_repo.get_playlist(db, playlist_id)

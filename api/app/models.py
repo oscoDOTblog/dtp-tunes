@@ -148,6 +148,7 @@ class PlaylistUpdate(CamelModel):
     public: bool | None = None
     songIdsToAdd: list[str] = Field(default_factory=list)
     songIndexesToRemove: list[int] = Field(default_factory=list)
+    orderedSongIds: list[str] | None = None
 
 
 class StarTargetType(str, Enum):

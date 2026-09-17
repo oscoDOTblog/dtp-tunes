@@ -43,7 +43,16 @@ export function AudioEngine() {
     };
     const onWaiting = () => setLoading(true);
     const onPlaying = () => setLoading(false);
-    const onEnded = () => handleEnded();
+    const onEnded = () => {
+      const { repeat, queue: currentQueue } = usePlayerStore.getState();
+      if (repeat === "one" || (repeat === "all" && currentQueue.length === 1)) {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+        audio.play().catch(() => undefined);
+        return;
+      }
+      handleEnded();
+    };
 
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
