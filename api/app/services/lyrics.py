@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from app.config import get_settings
 from app.services.media import resolve_music_path
 
 MAX_LYRICS_BYTES = 1024 * 1024
+logger = logging.getLogger("dtp_tunes.lyrics")
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,7 @@ def write_sidecar(relative_audio_path: str, text: str) -> LyricsSidecar:
         temp_path = None
         return read_sidecar(resolve_music_path(relative_audio_path))
     except OSError as exc:
+        logger.exception("Unable to write lyrics sidecar path=%r", path)
         raise HTTPException(status_code=500, detail="Unable to write lyrics sidecar") from exc
     finally:
         if temp_path:
@@ -94,4 +97,5 @@ def delete_sidecar(relative_audio_path: str) -> None:
     except FileNotFoundError:
         return
     except OSError as exc:
+        logger.exception("Unable to delete lyrics sidecar path=%r", path)
         raise HTTPException(status_code=500, detail="Unable to delete lyrics sidecar") from exc
