@@ -113,6 +113,16 @@ class SongOut(CamelModel):
     coverArtId: str | None = None
     starred: bool = False
     playCount: int = 0
+    canEditLyrics: bool = False
+
+
+class LyricsOut(CamelModel):
+    lyrics: str | None = None
+    hasLyrics: bool = False
+
+
+class LyricsUpdate(CamelModel):
+    lyrics: str
 
 
 class GenreOut(CamelModel):

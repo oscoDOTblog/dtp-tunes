@@ -58,7 +58,7 @@ services:
       MUSIC_PATH: /music
       CACHE_PATH: /cache
     volumes:
-      - "${MUSIC_HOST_PATH:-./music}:/music:ro"
+      - "${MUSIC_HOST_PATH:-./music}:/music"
       - ./cache:/cache
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]

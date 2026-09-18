@@ -114,7 +114,10 @@ async def get_playlist(
     playlist = await _get_owned_playlist(db, playlist_id, user)
     songs_by_id = await catalog_repo.get_songs_by_ids(db, playlist.get("songIds", []))
     ordered = [songs_by_id[sid] for sid in playlist.get("songIds", []) if sid in songs_by_id]
-    return {"playlist": _playlist_out(playlist, songs_by_id=songs_by_id), "songs": [song_out(s) for s in ordered]}
+    return {
+        "playlist": _playlist_out(playlist, songs_by_id=songs_by_id),
+        "songs": [song_out(s, can_edit_lyrics=user.get("role") == "admin") for s in ordered],
+    }
 
 
 @router.patch("/{playlist_id}", response_model=PlaylistOut)

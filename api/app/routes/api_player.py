@@ -22,7 +22,7 @@ async def get_queue(db: AsyncIOMotorDatabase = Depends(get_db), user: dict = Dep
     songs_by_id = await catalog_repo.get_songs_by_ids(db, queue.get("songIds", []))
     ordered = [songs_by_id[sid] for sid in queue.get("songIds", []) if sid in songs_by_id]
     out = PlayQueueOut(current=queue.get("current"), position=queue.get("position", 0), songIds=queue.get("songIds", []), changedAt=queue.get("changedAt"))
-    return {"queue": out, "songs": [song_out(s) for s in ordered]}
+    return {"queue": out, "songs": [song_out(s, can_edit_lyrics=user.get("role") == "admin") for s in ordered]}
 
 
 @router.put("")

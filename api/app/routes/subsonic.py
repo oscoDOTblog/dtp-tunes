@@ -345,6 +345,59 @@ async def get_starred2(request: Request, db: AsyncIOMotorDatabase = Depends(get_
 # --------------------------------------------------------------------------
 
 
+@endpoint("getLyrics")
+async def get_lyrics(request: Request, db: AsyncIOMotorDatabase = Depends(get_db)):
+    params = await parse_params(request)
+    _, err = await _authenticate(request, db, params)
+    if err:
+        return err
+    artist = params.get("artist")
+    title = params.get("title")
+    song = await catalog_repo.find_song_for_lyrics(db, artist=artist, title=title)
+    lyrics_payload = {"value": (song.get("lyrics") or "") if song else ""}
+    display_artist = song.get("artistName") if song else artist
+    display_title = song.get("title") if song else title
+    if display_artist is not None:
+        lyrics_payload["artist"] = display_artist
+    if display_title is not None:
+        lyrics_payload["title"] = display_title
+    payload = {"lyrics": lyrics_payload}
+    return render_envelope(request, params.as_dict(), ok_envelope(payload))
+
+
+@endpoint("getLyricsBySongId")
+async def get_lyrics_by_song_id(request: Request, db: AsyncIOMotorDatabase = Depends(get_db)):
+    params = await parse_params(request)
+    _, err = await _authenticate(request, db, params)
+    if err:
+        return err
+    song_id = params.get("id")
+    if not song_id:
+        return render_envelope(request, params.as_dict(), error_envelope(SubsonicError.MISSING_PARAMETER, "Missing id"))
+    song = await catalog_repo.get_song(db, song_id)
+    if not song:
+        return render_envelope(request, params.as_dict(), error_envelope(SubsonicError.NOT_FOUND, "Song not found"))
+    structured: list[dict] = []
+    lyrics = song.get("lyrics")
+    if lyrics is not None:
+        entry = {
+            "lang": "und",
+            "offset": 0,
+            "synced": False,
+            "line": [{"value": line} for line in lyrics.split("\n")],
+        }
+        if song.get("artistName") is not None:
+            entry["displayArtist"] = song["artistName"]
+        if song.get("title") is not None:
+            entry["displayTitle"] = song["title"]
+        structured.append(entry)
+    return render_envelope(
+        request,
+        params.as_dict(),
+        ok_envelope({"lyricsList": {"structuredLyrics": structured}}),
+    )
+
+
 @endpoint("star")
 async def star(request: Request, db: AsyncIOMotorDatabase = Depends(get_db)):
     params = await parse_params(request)

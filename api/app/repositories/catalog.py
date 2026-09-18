@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.repositories.base import normalize, utcnow
@@ -226,6 +228,19 @@ async def upsert_song_by_path(db: AsyncIOMotorDatabase, *, path: str, fields: di
 
 async def get_song(db: AsyncIOMotorDatabase, song_id: str) -> dict | None:
     return await db.songs.find_one({"_id": song_id})
+
+
+async def find_song_for_lyrics(db: AsyncIOMotorDatabase, *, artist: str | None, title: str | None) -> dict | None:
+    if not title:
+        return None
+    query: dict = {"normalizedTitle": normalize(title)}
+    if artist:
+        query["artistName"] = {"$regex": f"^{re.escape(artist.strip())}$", "$options": "i"}
+    return await db.songs.find_one(query)
+
+
+async def set_song_lyrics(db: AsyncIOMotorDatabase, song_id: str, fields: dict) -> None:
+    await db.songs.update_one({"_id": song_id}, {"$set": {**fields, "updatedAt": utcnow()}})
 
 
 async def get_songs_by_ids(db: AsyncIOMotorDatabase, song_ids: list[str]) -> dict[str, dict]:

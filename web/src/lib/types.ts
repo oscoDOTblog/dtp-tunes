@@ -48,6 +48,7 @@ export interface Song {
   coverArtId?: string | null;
   starred: boolean;
   playCount: number;
+  canEditLyrics: boolean;
 }
 
 export interface Genre {

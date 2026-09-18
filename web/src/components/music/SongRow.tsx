@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Pause, Play, Heart, MoreVertical, ListPlus, Download } from "lucide-react";
+import { Pause, Play, Heart, MoreVertical, ListPlus, Download, FileText } from "lucide-react";
 import type { Song } from "@/lib/types";
 import { coverUrl, downloadFile, songDownloadUrl } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { ContextMenu, Menu, MenuItem, type ContextMenuPosition } from "@/components/ui/Menu";
 import { SaveToPlaylistDialog } from "@/components/music/SaveToPlaylistDialog";
 import { useToast } from "@/components/ui/ToastProvider";
+import { LyricsDialog } from "@/components/music/LyricsDialog";
 
 interface SongRowProps {
   song: Song;
@@ -27,6 +28,7 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
   const playQueue = usePlayerStore((s) => s.playQueue);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [lyricsOpen, setLyricsOpen] = useState(false);
   const [contextPos, setContextPos] = useState<ContextMenuPosition | null>(null);
   const [downloading, setDownloading] = useState(false);
   const toast = useToast();
@@ -64,6 +66,12 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
         <Download size={16} />
         {downloading ? "Downloading…" : "Download"}
       </MenuItem>
+      {song.canEditLyrics && (
+        <MenuItem onClick={() => setLyricsOpen(true)}>
+          <FileText size={16} />
+          Edit lyrics
+        </MenuItem>
+      )}
     </>
   );
 
@@ -151,6 +159,7 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
       </ContextMenu>
 
       <SaveToPlaylistDialog song={song} open={saveOpen} onClose={() => setSaveOpen(false)} />
+      {lyricsOpen && <LyricsDialog song={song} onClose={() => setLyricsOpen(false)} />}
     </>
   );
 }

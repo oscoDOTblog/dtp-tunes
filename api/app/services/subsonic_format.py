@@ -17,6 +17,7 @@ OPEN_SUBSONIC_EXTENSIONS = [
     {"name": "transcodeOffset", "versions": [1]},
     {"name": "formPost", "versions": [1]},
     {"name": "apiKeyAuthentication", "versions": [1]},
+    {"name": "songLyrics", "versions": [1]},
 ]
 
 
@@ -60,6 +61,9 @@ def _dict_to_xml(tag: str, data, parent: Element | None = None) -> Element:
     element = Element(tag) if parent is None else SubElement(parent, tag)
     if isinstance(data, dict):
         for key, value in data.items():
+            if key == "value" and tag in {"lyrics", "line"}:
+                element.text = _xml_str(value)
+                continue
             if isinstance(value, (dict, list)):
                 if isinstance(value, list):
                     for item in value:
@@ -100,7 +104,7 @@ def render_envelope(request: Request, params: dict, envelope: dict) -> Response:
                     _dict_to_xml(key, item, root)
             else:
                 _dict_to_xml(key, value, root)
-        xml_bytes = b'<?xml version="1.0" encoding="UTF-8"?>' + tostring(root)
+        xml_bytes = b'<?xml version="1.0" encoding="UTF-8"?>' + tostring(root, encoding="utf-8")
         return Response(content=xml_bytes, media_type="text/xml; charset=utf-8")
 
     import orjson

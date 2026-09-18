@@ -88,6 +88,19 @@ should use **Settings → Subsonic API keys** instead.
 | `search3` | ✅ Tested | Case-insensitive substring match across artists/albums/songs |
 | `getStarred2` | ✅ Tested | |
 
+### Lyrics
+
+| Endpoint | Status | Notes |
+| --- | --- | --- |
+| `getLyrics` | ✅ Tested | Raw, unsynchronized lyrics |
+| `getLyricsBySongId` | ✅ Tested | `songLyrics` v1; returns `synced=false` lines |
+
+Lyrics are read from a UTF-8 `.txt` file beside the audio file with the same
+basename (for example, `01 - Song.flac` uses `01 - Song.txt`). Administrators
+can create or edit this sidecar from a song's **Edit lyrics** menu action. A
+library scan also imports sidecars added outside dtp-tunes. Timestamps and LRC
+files are not supported in v1.
+
 ### User state
 
 | Endpoint | Status | Notes |

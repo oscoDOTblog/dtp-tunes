@@ -12,6 +12,7 @@ from app.repositories import catalog as catalog_repo
 from app.repositories import scan_jobs as scan_jobs_repo
 from app.worker.artwork import save_album_cover
 from app.worker.tags import ExtractedTags, extract_tags, find_sidecar_artwork, is_supported
+from app.services.lyrics import lyrics_fields, read_sidecar
 
 logger = logging.getLogger("dtp_tunes.worker.scanner")
 
@@ -96,8 +97,23 @@ async def _scan_one_file(
 ) -> None:
     stat = os.stat(absolute_path)
 
-    existing = await db.songs.find_one({"path": relative_path}, {"fileMtime": 1, "fileSize": 1, "albumId": 1})
+    existing = await db.songs.find_one(
+        {"path": relative_path},
+        {"fileMtime": 1, "fileSize": 1, "albumId": 1, "lyricsMtimeNs": 1, "lyricsFileSize": 1},
+    )
+    try:
+        sidecar = read_sidecar(absolute_path)
+    except (OSError, UnicodeError, ValueError) as exc:
+        logger.warning("Unable to read lyrics for %s: %s", relative_path, exc)
+        sidecar = None
+    lyrics_changed = sidecar is not None and (
+        existing is None
+        or existing.get("lyricsMtimeNs") != sidecar.mtime_ns
+        or existing.get("lyricsFileSize") != sidecar.size
+    )
     if existing and existing.get("fileMtime") == int(stat.st_mtime) and existing.get("fileSize") == stat.st_size:
+        if lyrics_changed:
+            await catalog_repo.set_song_lyrics(db, existing["_id"], lyrics_fields(sidecar))
         # File unchanged — still refresh cover if the cached JPEG went missing.
         album_id = existing.get("albumId")
         if album_id:
@@ -154,6 +170,7 @@ async def _scan_one_file(
         "albumName": tags.album,
         "artistId": artist_doc["_id"] if artist_doc else None,
         "artistName": tags.artist or tags.album_artist,
+        "normalizedArtistName": normalize(tags.artist or tags.album_artist or ""),
         "genre": tags.genre,
         "track": tags.track,
         "discNumber": tags.disc_number,
@@ -165,6 +182,7 @@ async def _scan_one_file(
         "size": tags.size,
         "fileMtime": int(stat.st_mtime),
         "fileSize": stat.st_size,
+        **(lyrics_fields(sidecar) if sidecar is not None else {}),
     }
     _, created = await catalog_repo.upsert_song_by_path(db, path=relative_path, fields=fields)
 
