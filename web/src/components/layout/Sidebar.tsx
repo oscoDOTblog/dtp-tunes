@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, Search, Library, ListMusic, Loader2, Settings, Plus } from "lucide-react";
+import { Home, Search, Library, ListMusic, Loader2, Settings, Plus, Music2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFetch } from "@/lib/useFetch";
 import { PlaylistListItem } from "@/components/music/PlaylistListItem";
 import { api } from "@/lib/api";
 import { usePlaylistsRefresh } from "@/store/playlistsRefreshStore";
 import type { Playlist } from "@/lib/types";
+import { useAuth } from "@/lib/useAuth";
 
 const navItems = [
   { href: "/", label: "Home", icon: Home },
@@ -18,6 +19,7 @@ const navItems = [
 ];
 
 export function Sidebar() {
+  const { user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const version = usePlaylistsRefresh((s) => s.version);
@@ -60,6 +62,15 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {user?.role === "admin" && (
+        <Link href="/add-music" className={cn(
+          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          pathname.startsWith("/add-music") ? "bg-bg-elevated-2 text-fg-primary" : "text-fg-secondary hover:bg-bg-hover hover:text-fg-primary",
+        )}>
+          <Music2 size={20} /> Add Music
+        </Link>
+      )}
 
       <div className="mt-4 flex items-center justify-between px-3">
         <span className="flex items-center gap-2 text-sm font-semibold text-fg-secondary">

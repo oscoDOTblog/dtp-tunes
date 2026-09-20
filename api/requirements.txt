@@ -12,6 +12,7 @@ python-multipart>=0.0.17
 httpx>=0.28.0
 orjson>=3.10.0
 aiofiles>=24.1.0
+yt-dlp[default]>=2025.11.12
 
 # Dev / test
 pytest>=8.3.0

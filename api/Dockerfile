@@ -17,8 +17,8 @@ COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.
 COPY --from=deps /usr/local/bin /usr/local/bin
 COPY app ./app
 
-RUN mkdir -p /music /cache \
-  && chown -R tunes:tunes /app /cache
+RUN mkdir -p /music /cache /ingest-data \
+  && chown -R tunes:tunes /app /cache /ingest-data
 
 USER tunes
 ENV PYTHONUNBUFFERED=1 \

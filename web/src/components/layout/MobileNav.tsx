@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Search, Library, Settings } from "lucide-react";
+import { Home, Search, Library, Settings, Music2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/useAuth";
 
 const items = [
   { href: "/", label: "Home", icon: Home },
@@ -13,10 +14,11 @@ const items = [
 ];
 
 export function MobileNav() {
+  const { user } = useAuth();
   const pathname = usePathname();
   return (
     <nav className="flex h-16 flex-shrink-0 items-center justify-around border-t border-border-subtle bg-bg-elevated md:hidden">
-      {items.map(({ href, label, icon: Icon }) => {
+      {(user?.role === "admin" ? [...items, { href: "/add-music", label: "Add Music", icon: Music2 }] : items).map(({ href, label, icon: Icon }) => {
         const active = pathname === href;
         return (
           <Link

@@ -1,7 +1,7 @@
 # dtp-tunes
 
 A self-hosted music server: a Spotify-inspired Next.js web player, a FastAPI
-backend, MongoDB metadata, a read-only music library volume, on-demand FFmpeg
+backend, MongoDB metadata, a writable music library for admin uploads and lyrics, on-demand FFmpeg
 transcoding, and a deliberately scoped [OpenSubsonic](https://opensubsonic.netlify.app/docs/api-reference/)
 compatibility layer so existing Subsonic-family apps (DSub, Substreamer,
 play:Sub, Amperfy, etc.) can connect too.
@@ -21,6 +21,7 @@ stack behind Runtipi Traefik on a public custom domain.
 | `web`     | Next.js Spotify-inspired frontend (standalone build)                        |
 | `api`     | FastAPI — JSON web APIs, OpenSubsonic REST, streaming, cover art, transcoding |
 | `worker`  | same image as `api`, runs the leased library scanner instead of the HTTP server |
+| `ingest-worker` | private, leased URL-download queue worker; shares persistent staging with the API |
 | `mongodb` | optional bundled metadata store — off by default; enable with `--profile bundled-db` (external `MONGODB_URI` used otherwise) |
 
 ## Quick start
@@ -40,7 +41,7 @@ stack behind Runtipi Traefik on a public custom domain.
    python3 -c "import secrets; print(secrets.token_urlsafe(32))"
    ```
 
-2. Copy your music into `./music` (read-only bind mount — see
+2. Copy your music into `./music` (API and ingestion worker have write access; the scanner is read-only — see
    [`music/README.md`](music/README.md) for supported formats and permission
    notes). An empty folder is fine to start; you can scan again later.
 
@@ -90,6 +91,8 @@ HTTPS instead of publishing dtp-tunes on the LAN. This stack stays
 
 Full checklist, networking, troubleshooting, and rollback:
 [`docs/RUNTIPI_DEPLOYMENT.md`](docs/RUNTIPI_DEPLOYMENT.md).
+For Add Music deployment and the `rath` library ACLs, see
+[`docs/INGEST_DEPLOYMENT.md`](docs/INGEST_DEPLOYMENT.md).
 
 ## Local development (without Docker)
 

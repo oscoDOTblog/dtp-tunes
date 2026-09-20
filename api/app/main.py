@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db import close_connection, ensure_indexes
-from app.routes import api_admin, api_auth, api_library, api_media, api_player, api_playlists, health, subsonic
+from app.routes import api_admin, api_auth, api_ingest, api_library, api_media, api_player, api_playlists, health, subsonic
 from app.services.auth_service import bootstrap_admin
 from app.services.transfer_logging import TransferLoggingMiddleware
 
@@ -25,6 +25,9 @@ async def lifespan(app: FastAPI):
 
     from app.db import get_database
 
+    await get_database().ingestJobs.update_many(
+        {"status": "saving"}, {"$set": {"status": "readyForReview"}}
+    )
     await bootstrap_admin(get_database(), username=settings.admin_username, password=settings.admin_password)
     logger.info("dtp-tunes API started")
     yield
@@ -52,5 +55,6 @@ app.include_router(api_playlists.router)
 app.include_router(api_player.router)
 app.include_router(api_media.router)
 app.include_router(api_admin.router)
+app.include_router(api_ingest.router)
 app.include_router(api_admin.keys_router)
 app.include_router(subsonic.router)

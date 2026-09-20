@@ -98,3 +98,19 @@ export interface ScanJob {
   errorCount: number;
   lastError?: string | null;
 }
+
+export interface IngestJob {
+  id: string;
+  mode: "oneOff" | "queue";
+  status: "staging" | "queued" | "downloading" | "readyForReview" | "saving" | "completed" | "failed" | "cancelled";
+  url: string;
+  album: { title: string; artist: string; year: string };
+  current: number;
+  total: number;
+  currentTitle?: string | null;
+  error?: string | null;
+  scanError?: string | null;
+  retryCount: number;
+  tracks: { id: number; title: string }[];
+  createdAt: string;
+}

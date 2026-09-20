@@ -23,6 +23,8 @@ class Settings(BaseSettings):
 
     music_path: str = "/music"
     cache_path: str = "/cache"
+    ingest_path: str = "/ingest-data"
+    ingest_workers: int = 1
     music_folder_name: str = "Music"
     music_folder_id: str = "1"
 

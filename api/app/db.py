@@ -105,6 +105,8 @@ async def ensure_indexes() -> None:
 
     await db.scanJobs.create_index("status")
     await db.scanJobs.create_index("leaseExpiresAt")
+    await db.ingestJobs.create_index([("status", 1), ("createdAt", 1)])
+    await db.ingestJobs.create_index("leaseExpiresAt")
 
     await db.sessions.create_index("expiresAt", expireAfterSeconds=0)
     await db.sessions.create_index("userId")

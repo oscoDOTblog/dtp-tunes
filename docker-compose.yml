@@ -60,6 +60,10 @@ services:
     volumes:
       - "${MUSIC_HOST_PATH:-./music}:/music"
       - ./cache:/cache
+      - ingest-data:/ingest-data
+    depends_on:
+      ingest-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 10s
@@ -87,6 +91,34 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  ingest-worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    user: "${PUID:-1001}:${PGID:-1001}"
+    command: ["python", "-m", "app.worker.ingest"]
+    env_file:
+      - .env
+    environment:
+      MUSIC_PATH: /music
+      CACHE_PATH: /cache
+      INGEST_PATH: /ingest-data
+    volumes:
+      - "${MUSIC_HOST_PATH:-./music}:/music"
+      - ingest-data:/ingest-data
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ingest-init:
+    image: busybox:1.37
+    user: "0:0"
+    command: ["sh", "-c", "chown ${PUID:-1001}:${PGID:-1001} /ingest-data"]
+    volumes:
+      - ingest-data:/ingest-data
+    restart: "no"
+
   # Optional bundled MongoDB for local/x86 hosts.
   # Disabled by default so external MONGODB_URI (e.g. Atlas) is used as-is.
   # Enable only when you want a local metadata store:
@@ -108,3 +140,4 @@ services:
 
 volumes:
   mongodb-data:
+  ingest-data:
