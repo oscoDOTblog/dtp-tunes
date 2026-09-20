@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { X, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Heart } from "lucide-react";
+import { X, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Heart, ScrollText } from "lucide-react";
 import { usePlayerStore } from "@/store/playerStore";
 import { coverUrl } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
@@ -10,7 +10,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { Slider } from "@/components/ui/Slider";
 import { cn } from "@/lib/utils";
 
-export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function NowPlayingSheet({ open, onClose, onShowLyrics }: { open: boolean; onClose: () => void; onShowLyrics: () => void }) {
   const currentSong = usePlayerStore((s) => s.currentSong());
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const currentTime = usePlayerStore((s) => s.currentTime);
@@ -83,9 +83,14 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
           </IconButton>
         </div>
 
-        <IconButton className={cn(currentSong.starred && "text-accent")} aria-label="Star">
-          <Heart size={20} fill={currentSong.starred ? "currentColor" : "none"} />
-        </IconButton>
+        <div className="flex items-center gap-6">
+          <IconButton onClick={onShowLyrics} aria-label="Show lyrics" title="Lyrics">
+            <ScrollText size={20} />
+          </IconButton>
+          <IconButton className={cn(currentSong.starred && "text-accent")} aria-label="Star">
+            <Heart size={20} fill={currentSong.starred ? "currentColor" : "none"} />
+          </IconButton>
+        </div>
       </div>
     </div>
   );

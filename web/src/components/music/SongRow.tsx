@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Pause, Play, Heart, MoreVertical, ListPlus, Download, FileText } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Pause, Play, Heart, MoreVertical, ListPlus, Download, FileText, Disc3 } from "lucide-react";
 import type { Song } from "@/lib/types";
 import { coverUrl, downloadFile, songDownloadUrl } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
@@ -23,6 +24,7 @@ interface SongRowProps {
 }
 
 export function SongRow({ song, index, queue, showAlbum = true, showCover = false, onToggleStar }: SongRowProps) {
+  const router = useRouter();
   const currentSong = usePlayerStore((s) => s.currentSong());
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -58,6 +60,12 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
 
   const menuItems = (
     <>
+      {song.albumId && (
+        <MenuItem onClick={() => router.push(`/album/${encodeURIComponent(song.albumId!)}`)}>
+          <Disc3 size={16} />
+          View album
+        </MenuItem>
+      )}
       <MenuItem onClick={() => setSaveOpen(true)}>
         <ListPlus size={16} />
         Save to playlist

@@ -14,6 +14,7 @@ import {
   Volume2,
   VolumeX,
   ListMusic,
+  ScrollText,
   Heart,
 } from "lucide-react";
 import { usePlayerStore } from "@/store/playerStore";
@@ -23,6 +24,7 @@ import { seekTo } from "@/lib/audioController";
 import { IconButton } from "@/components/ui/IconButton";
 import { Slider } from "@/components/ui/Slider";
 import { NowPlayingSheet } from "./NowPlayingSheet";
+import { PlayerLyricsDialog } from "./PlayerLyricsDialog";
 
 export function BottomPlayer() {
   const currentSong = usePlayerStore((s) => s.currentSong());
@@ -44,6 +46,7 @@ export function BottomPlayer() {
   const setCurrentTime = usePlayerStore((s) => s.setCurrentTime);
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [lyricsOpen, setLyricsOpen] = useState(false);
   const [starred, setStarred] = useState(false);
 
   async function toggleStar() {
@@ -126,6 +129,9 @@ export function BottomPlayer() {
         </div>
 
         <div className="hidden items-center gap-2 md:flex md:w-40">
+          <IconButton size="sm" onClick={() => setLyricsOpen(true)} aria-label="Show lyrics" title="Lyrics">
+            <ScrollText size={16} />
+          </IconButton>
           <Link href="/queue" aria-label="Queue">
             <IconButton size="sm">
               <ListMusic size={16} />
@@ -146,7 +152,8 @@ export function BottomPlayer() {
         </div>
       </footer>
 
-      <NowPlayingSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+      <NowPlayingSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onShowLyrics={() => setLyricsOpen(true)} />
+      {lyricsOpen && <PlayerLyricsDialog key={currentSong.id} song={currentSong} onClose={() => setLyricsOpen(false)} />}
     </>
   );
 }
