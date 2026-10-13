@@ -23,7 +23,7 @@ from app.deps import get_db, require_admin
 from app.repositories import ingest_jobs, scan_jobs
 from app.repositories.base import utcnow
 from app.services.ingest import (
-    MAX_COVER_BYTES, MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES,
+    AUDIO_UPLOAD_EXTENSIONS, MAX_COVER_BYTES, MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES,
     cleanup_job, job_dir, promote_tracks, read_tags,
 )
 
@@ -54,6 +54,22 @@ class ReviewTrack(BaseModel):
 
 class ReviewInput(BaseModel):
     tracks: list[ReviewTrack]
+
+
+def _reviewed_track_titles(value: str, count: int) -> list[str] | None:
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid reviewed track titles") from exc
+    if (
+        not isinstance(parsed, list)
+        or len(parsed) != count
+        or any(not isinstance(title, str) or not title.strip() or len(title.strip()) > 200 for title in parsed)
+    ):
+        raise HTTPException(status_code=400, detail="Provide one valid title for each track")
+    return [title.strip() for title in parsed]
 
 
 def _check_url(url: str) -> str:
@@ -259,19 +275,22 @@ async def clear_finished(db: AsyncIOMotorDatabase = Depends(get_db), _: dict = D
 
 
 @router.post("/upload")
-async def upload_mp3s(
+async def upload_audio(
     files: list[UploadFile] = File(...), artist: str = Form(""), album: str = Form(""),
-    year: str = Form(""), cover: UploadFile | None = File(None),
+    year: str = Form(""), track_titles: str = Form(""), cover: UploadFile | None = File(None),
     db: AsyncIOMotorDatabase = Depends(get_db), _: dict = Depends(require_admin),
 ) -> dict:
     if not files or len(files) > MAX_UPLOAD_FILES:
-        raise HTTPException(status_code=400, detail=f"Choose 1–{MAX_UPLOAD_FILES} MP3 files")
+        raise HTTPException(status_code=400, detail=f"Choose 1–{MAX_UPLOAD_FILES} audio files")
+    reviewed_titles = _reviewed_track_titles(track_titles, len(files))
     with tempfile.TemporaryDirectory(prefix="upload-", dir=get_settings().ingest_path) as temp:
         staged: list[tuple[Path, dict]] = []
         for index, upload in enumerate(files, 1):
-            if not (upload.filename or "").lower().endswith(".mp3"):
-                raise HTTPException(status_code=400, detail="Only MP3 files are supported")
-            path = Path(temp) / f"{index:02d}.mp3"
+            suffix = Path(upload.filename or "").suffix.lower()
+            if suffix not in AUDIO_UPLOAD_EXTENSIONS:
+                allowed = ", ".join(sorted(ext.lstrip(".").upper() for ext in AUDIO_UPLOAD_EXTENSIONS))
+                raise HTTPException(status_code=400, detail=f"Supported audio formats: {allowed}")
+            path = Path(temp) / f"{index:02d}{suffix}"
             await _save_upload(upload, path, MAX_UPLOAD_BYTES)
             staged.append((path, await asyncio.to_thread(read_tags, path)))
         cover_data = None
@@ -285,7 +304,10 @@ async def upload_mp3s(
         resolved_year = year.strip() or staged[0][1]["year"]
         await asyncio.to_thread(
             promote_tracks,
-            [(path, tags["title"] or Path(upload.filename or "").stem) for (path, tags), upload in zip(staged, files)],
+            [
+                (path, reviewed_titles[index] if reviewed_titles else tags["title"] or Path(upload.filename or "").stem)
+                for index, ((path, tags), upload) in enumerate(zip(staged, files))
+            ],
             artist=resolved_artist, album=resolved_album, year=resolved_year, cover=cover_data,
         )
     scan_error = None

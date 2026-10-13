@@ -10,7 +10,8 @@ import tempfile
 from pathlib import Path
 
 from fastapi import HTTPException
-from mutagen.id3 import APIC, TALB, TDRC, TIT2, TPE1, TRCK, ID3
+from mutagen import File as MutagenFile
+from mutagen.id3 import APIC, ID3, TALB, TDRC, TIT2, TPE1, TRCK
 from mutagen.mp3 import MP3
 
 from app.config import get_settings
@@ -18,6 +19,7 @@ from app.config import get_settings
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 MAX_UPLOAD_FILES = 50
 MAX_COVER_BYTES = 8 * 1024 * 1024
+AUDIO_UPLOAD_EXTENSIONS = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav"}
 
 
 def safe_name(value: str, fallback: str) -> str:
@@ -40,43 +42,64 @@ def album_dir(artist: str, album: str) -> Path:
     return target
 
 
-def _load_mp3(path: Path) -> MP3:
+def _load_audio(path: Path):
     try:
-        audio = MP3(path, ID3=ID3)
+        audio = MutagenFile(path, easy=path.suffix.lower() != ".wav")
+        if audio is None:
+            raise ValueError("unrecognized audio file")
         if audio.tags is None:
             audio.add_tags()
         return audio
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid MP3: {path.name}") from exc
+        raise HTTPException(status_code=400, detail=f"Invalid audio file: {path.name}") from exc
 
 
 def read_tags(path: Path) -> dict[str, str]:
-    audio = _load_mp3(path)
+    audio = _load_audio(path)
+
     def first(key: str) -> str:
-        frame = audio.tags.get(key)
-        return str(frame.text[0]).strip() if frame and getattr(frame, "text", None) else ""
-    return {"title": first("TIT2"), "artist": first("TPE1"), "album": first("TALB"), "year": first("TDRC")[:4]}
+        id3_keys = {"title": "TIT2", "artist": "TPE1", "album": "TALB", "date": "TDRC"}
+        value = audio.tags.get(id3_keys.get(key, key) if path.suffix.lower() == ".wav" else key)
+        if getattr(value, "text", None):
+            value = value.text
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else ""
+        return str(value or "").strip()
+
+    return {"title": first("title"), "artist": first("artist"), "album": first("album"), "year": first("date")[:4]}
 
 
 def tag_track(path: Path, *, title: str, artist: str, album: str, year: str, number: int, cover: bytes | None) -> None:
-    audio = _load_mp3(path)
-    audio.tags["TIT2"] = TIT2(encoding=3, text=title)
-    audio.tags["TPE1"] = TPE1(encoding=3, text=artist)
-    audio.tags["TALB"] = TALB(encoding=3, text=album)
-    audio.tags["TRCK"] = TRCK(encoding=3, text=str(number))
-    if year:
-        audio.tags["TDRC"] = TDRC(encoding=3, text=year)
-    if cover:
-        audio.tags["APIC:Cover"] = APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=cover)
-    audio.save(v2_version=3)
+    audio = _load_audio(path)
+    if path.suffix.lower() == ".wav":
+        audio.tags["TIT2"] = TIT2(encoding=3, text=title)
+        audio.tags["TPE1"] = TPE1(encoding=3, text=artist)
+        audio.tags["TALB"] = TALB(encoding=3, text=album)
+        audio.tags["TRCK"] = TRCK(encoding=3, text=str(number))
+        if year:
+            audio.tags["TDRC"] = TDRC(encoding=3, text=year)
+    else:
+        audio.tags["title"] = [title]
+        audio.tags["artist"] = [artist]
+        audio.tags["album"] = [album]
+        audio.tags["tracknumber"] = [str(number)]
+        if year:
+            audio.tags["date"] = [year]
+    audio.save()
+    if cover and path.suffix.lower() == ".mp3":
+        mp3 = MP3(path, ID3=ID3)
+        if mp3.tags is None:
+            mp3.add_tags()
+        mp3.tags["APIC:Cover"] = APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=cover)
+        mp3.save(v2_version=3)
 
 
 def promote_tracks(tracks: list[tuple[Path, str]], *, artist: str, album: str, year: str = "", cover: bytes | None = None) -> Path:
     """Merge audio by filename; never remove unrelated tracks or lyric sidecars."""
     for source, _title in tracks:
-        if not source.is_file() or source.suffix.lower() != ".mp3":
+        if not source.is_file() or source.suffix.lower() not in AUDIO_UPLOAD_EXTENSIONS:
             raise HTTPException(status_code=400, detail="Invalid staged track")
-        _load_mp3(source)
+        _load_audio(source)
     target = album_dir(artist, album)
     target.mkdir(parents=True, exist_ok=True)
     lock = target / ".ingest.lock"
@@ -91,11 +114,12 @@ def promote_tracks(tracks: list[tuple[Path, str]], *, artist: str, album: str, y
 
 def _promote_locked(target: Path, tracks: list[tuple[Path, str]], *, artist: str, album: str, year: str, cover: bytes | None) -> None:
     for source, _title in tracks:
-        if not source.is_file() or source.suffix.lower() != ".mp3":
+        if not source.is_file() or source.suffix.lower() not in AUDIO_UPLOAD_EXTENSIONS:
             raise HTTPException(status_code=400, detail="Invalid staged track")
     for index, (source, title) in enumerate(tracks, start=1):
-        destination = target / f"{index:02d} - {safe_name(title, f'Track {index}')}.mp3"
-        fd, temporary = tempfile.mkstemp(prefix=".ingest-", suffix=".mp3", dir=target)
+        suffix = source.suffix.lower()
+        destination = target / f"{index:02d} - {safe_name(title, f'Track {index}')}{suffix}"
+        fd, temporary = tempfile.mkstemp(prefix=".ingest-", suffix=suffix, dir=target)
         try:
             with os.fdopen(fd, "wb") as output, source.open("rb") as input_file:
                 shutil.copyfileobj(input_file, output)

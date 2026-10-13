@@ -85,7 +85,7 @@ export default function AddMusicPage() {
         </div>
       </section>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-      <Link href="/add-music/upload" className="text-sm text-accent hover:underline">Or upload MP3 files directly</Link>
+      <Link href="/add-music/upload" className="text-sm text-accent hover:underline">Or upload audio files directly</Link>
     </div>
   );
 }

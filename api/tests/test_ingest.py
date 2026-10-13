@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+import wave
 
 import pytest
 from fastapi import HTTPException
@@ -56,10 +57,37 @@ def test_invalid_mp3_cannot_replace_existing_track(tmp_path, monkeypatch):
     assert (album / "01 - Song.mp3").read_bytes() == b"existing"
 
 
+def test_wav_upload_preserves_format_and_writes_tags(tmp_path, monkeypatch):
+    music = tmp_path / "music"
+    music.mkdir()
+    monkeypatch.setattr(ingest, "get_settings", lambda: SimpleNamespace(music_path=str(music)))
+    source = tmp_path / "source.wav"
+    with wave.open(str(source), "wb") as audio:
+        audio.setparams((1, 2, 8000, 0, "NONE", ""))
+        audio.writeframes(bytes(1600))
+
+    ingest.promote_tracks(
+        [(source, "Wave Song")], artist="Artist", album="Album", year="2026"
+    )
+
+    saved = music / "Artist" / "Album" / "01 - Wave Song.wav"
+    assert saved.exists()
+    assert ingest.read_tags(saved) == {
+        "title": "Wave Song", "artist": "Artist", "album": "Album", "year": "2026"
+    }
+
+
 @pytest.mark.parametrize("url", ["file:///etc/passwd", "http://localhost/x", "http://host.docker.internal/x", "http://127.0.0.1/x", "http://192.168.1.10/x", "oops"])
 def test_rejects_local_or_invalid_urls(url):
     with pytest.raises(HTTPException) as exc:
         api_ingest._check_url(url)
+    assert exc.value.status_code == 400
+
+
+def test_reviewed_upload_titles_are_trimmed_and_validated():
+    assert api_ingest._reviewed_track_titles('[" First ", "Second"]', 2) == ["First", "Second"]
+    with pytest.raises(HTTPException) as exc:
+        api_ingest._reviewed_track_titles('["Only one"]', 2)
     assert exc.value.status_code == 400
 
 
