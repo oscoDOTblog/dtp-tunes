@@ -114,3 +114,46 @@ export interface IngestJob {
   tracks: { id: number; title: string }[];
   createdAt: string;
 }
+
+export interface YouTubeCandidate {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnailUrl?: string | null;
+  durationSeconds?: number | null;
+  score?: number;
+}
+
+export interface PlaylistTransferTrack {
+  index: number;
+  appleTrackId?: string | null;
+  title: string;
+  artist: string;
+  album?: string | null;
+  durationMs?: number | null;
+  match?: YouTubeCandidate | null;
+  candidates: YouTubeCandidate[];
+  confidence: "high" | "medium" | "low" | "unmatched" | "manual" | "skipped";
+  skipped: boolean;
+  importStatus?: "added" | "duplicate" | "skipped" | "unmatched" | "failed" | null;
+  error?: string | null;
+}
+
+export interface PlaylistTransfer {
+  id: string;
+  status: "queuedExtraction" | "extracting" | "readyForReview" | "queuedImport" | "importing" | "completed" | "failed";
+  sourceUrl: string;
+  source?: { id: string; name: string; storefront: string; url: string } | null;
+  tracks: PlaylistTransferTrack[];
+  current: number;
+  total: number;
+  destination?: { playlistId?: string; name?: string; created?: boolean } | null;
+  result?: { added: number; duplicates: number; skipped: number; unmatched: number; failed: number } | null;
+  error?: string | null;
+}
+
+export interface ExternalPlaylist {
+  id: string;
+  name: string;
+  privacyStatus: string;
+}

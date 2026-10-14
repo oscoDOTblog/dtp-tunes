@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { uploadFormWithProgress, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
@@ -20,12 +20,11 @@ export default function UploadMusicPage() {
   const [tracks, setTracks] = useState<{ id: string; file: File; title: string }[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number } | null>(null);
 
-  useEffect(() => {
-    if (!cover) { setCoverPreview(null); return; }
-    const url = URL.createObjectURL(cover);
-    setCoverPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [cover]);
+  function selectCover(file: File | null) {
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+    setCover(file);
+    setCoverPreview(file ? URL.createObjectURL(file) : null);
+  }
 
   if (user?.role !== "admin") return <p className="p-6 text-fg-secondary">Admin access required.</p>;
   async function submit() {
@@ -42,7 +41,7 @@ export default function UploadMusicPage() {
         (loaded, total) => setUploadProgress({ loaded, total }),
       );
       setResult(`Saved ${response.count} tracks to ${response.artist} / ${response.album}${response.scanError ? `. Scan failed: ${response.scanError}` : ". Library scan queued."}`);
-      setTracks([]); setCover(null);
+      setTracks([]); selectCover(null);
     } catch (err) { setError(err instanceof ApiError ? err.message : "Upload failed"); }
     finally { setBusy(false); setUploadProgress(null); }
   }
@@ -86,7 +85,7 @@ export default function UploadMusicPage() {
             {coverPreview ? <img src={coverPreview} alt="Album cover preview" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-4 text-center text-xs text-fg-secondary">No album cover selected</div>}
           </div>
           <label className="cursor-pointer text-center text-sm text-accent hover:underline">{cover ? "Change cover" : "Choose cover"}
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => setCover(event.target.files?.[0] ?? null)} className="sr-only" />
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => selectCover(event.target.files?.[0] ?? null)} className="sr-only" />
           </label>
         </div>
         <div className="flex flex-col gap-3">

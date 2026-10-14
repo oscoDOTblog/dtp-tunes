@@ -225,3 +225,22 @@ class LibraryResetOut(CamelModel):
     coversCleared: int = 0
     rescanEnqueued: bool = False
     scanJob: ScanJobOut | None = None
+
+
+class PlaylistTransferCreate(CamelModel):
+    sourcePlatform: Literal["appleMusic"] = "appleMusic"
+    sourceUrl: str = Field(min_length=1, max_length=2048)
+
+
+class PlaylistTransferMatchUpdate(CamelModel):
+    videoId: str | None = Field(default=None, max_length=32)
+    skipped: bool = False
+
+
+class PlaylistTransferSearch(CamelModel):
+    query: str = Field(min_length=1, max_length=300)
+
+
+class PlaylistTransferConfirm(CamelModel):
+    destinationPlaylistId: str | None = Field(default=None, max_length=128)
+    newPlaylistName: str | None = Field(default=None, min_length=1, max_length=150)

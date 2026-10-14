@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     session_cookie_name: str = "dtp_tunes_session"
     session_ttl_seconds: int = 604800
 
+    apple_music_team_id: str | None = None
+    apple_music_key_id: str | None = None
+    apple_music_private_key: str | None = None
+    apple_music_default_storefront: str = "us"
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+
     @field_validator("app_encryption_key")
     @classmethod
     def encryption_key_strength(cls, value: str) -> str:

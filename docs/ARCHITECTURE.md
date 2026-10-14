@@ -14,6 +14,9 @@ flowchart LR
     FastAPI --> MusicVolume[ReadOnlyMusicVolume]
     FastAPI --> FFmpeg[BoundedLiveFFmpegStreams]
     ScanWorker[ScannerWorker] --> MongoDB
+    TransferWorker[PlaylistTransferWorker] --> MongoDB
+    TransferWorker --> AppleMusicAPI[AppleMusicAPI]
+    TransferWorker --> YouTubeAPI[YouTubeDataAPI]
     ScanWorker --> MusicVolume
     ScanWorker --> CacheVolume[ArtworkCache]
 ```
@@ -45,6 +48,9 @@ except the `gateway`, which is the single public origin:
   never block the HTTP process that serves streams.
 - **mongodb** — the only stateful data store. No port is published by
   default.
+- **playlist-transfer-worker** — leases durable transfer jobs, extracts public
+  Apple Music playlist tracks, proposes YouTube matches, and resumes confirmed
+  imports without tying up API requests.
 
 ## Backend layout (`api/app`)
 
@@ -100,6 +106,9 @@ etc. The prefix is applied in one place (`PrefixedDatabase` in
 | `playHistory` | scrobble log per user                                                 | `(userId, playedAt)` |
 | `playQueues`  | one saved queue per user (`current`, `position`, `songIds`)          | unique `userId` |
 | `scanJobs`    | leased scan job documents (`status`, `leaseOwner`, `leaseExpiresAt`) | `status`, `leaseExpiresAt` |
+| `playlistTransferJobs` | source tracks, reviewed matches, import progress and results | `status`, `createdAt`, `leaseExpiresAt` |
+| `integrations` | singleton encrypted YouTube refresh-token connection | `_id` |
+| `oauthStates` | short-lived Google OAuth CSRF states | unique `stateHash`, TTL `expiresAt` |
 
 Song identity is the relative file path under `/music`; moving/renaming a
 file outside the app currently creates a new song identity (see

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, Search, Library, ListMusic, Loader2, Settings, Plus, Music2 } from "lucide-react";
+import { Home, Search, Library, ListMusic, Loader2, Settings, Plus, Music2, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFetch } from "@/lib/useFetch";
 import { PlaylistListItem } from "@/components/music/PlaylistListItem";
@@ -64,12 +64,14 @@ export function Sidebar() {
       </nav>
 
       {user?.role === "admin" && (
-        <Link href="/add-music" className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-          pathname.startsWith("/add-music") ? "bg-bg-elevated-2 text-fg-primary" : "text-fg-secondary hover:bg-bg-hover hover:text-fg-primary",
-        )}>
-          <Music2 size={20} /> Add Music
-        </Link>
+        <>
+          <Link href="/add-music" className={cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors", pathname.startsWith("/add-music") ? "bg-bg-elevated-2 text-fg-primary" : "text-fg-secondary hover:bg-bg-hover hover:text-fg-primary")}>
+            <Music2 size={20} /> Add Music
+          </Link>
+          <Link href="/import-playlist" className={cn("flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors", pathname.startsWith("/import-playlist") ? "bg-bg-elevated-2 text-fg-primary" : "text-fg-secondary hover:bg-bg-hover hover:text-fg-primary")}>
+            <ArrowRightLeft size={20} /> Import Playlist
+          </Link>
+        </>
       )}
 
       <div className="mt-4 flex items-center justify-between px-3">

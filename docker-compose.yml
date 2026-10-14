@@ -111,6 +111,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  playlist-transfer-worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    user: "${PUID:-1001}:${PGID:-1001}"
+    command: ["python", "-m", "app.worker.playlist_transfer"]
+    env_file:
+      - .env
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
   ingest-init:
     image: busybox:1.37
     user: "0:0"
