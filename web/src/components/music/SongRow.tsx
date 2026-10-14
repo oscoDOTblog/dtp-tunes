@@ -3,9 +3,9 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Pause, Play, Heart, MoreVertical, ListPlus, Download, FileText, Disc3 } from "lucide-react";
+import { Pause, Play, Heart, MoreVertical, ListPlus, Download, FileText, Disc3, Trash2 } from "lucide-react";
 import type { Song } from "@/lib/types";
-import { coverUrl, downloadFile, songDownloadUrl } from "@/lib/api";
+import { api, coverUrl, downloadFile, songDownloadUrl } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { usePlayerStore } from "@/store/playerStore";
 import { cn } from "@/lib/utils";
@@ -21,9 +21,10 @@ interface SongRowProps {
   showAlbum?: boolean;
   showCover?: boolean;
   onToggleStar?: (song: Song) => void;
+  onDeleted?: () => void;
 }
 
-export function SongRow({ song, index, queue, showAlbum = true, showCover = false, onToggleStar }: SongRowProps) {
+export function SongRow({ song, index, queue, showAlbum = true, showCover = false, onToggleStar, onDeleted }: SongRowProps) {
   const router = useRouter();
   const currentSong = usePlayerStore((s) => s.currentSong());
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -58,6 +59,18 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
     }
   }
 
+  async function handleDelete() {
+    if (!window.confirm(`Permanently delete “${song.title}”?\n\nThis removes the audio file and cannot be undone.`)) return;
+    try {
+      await api.delete(`/api/songs/${song.id}`);
+      toast.success(`Deleted “${song.title}”`);
+      if (onDeleted) onDeleted();
+      else window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete song");
+    }
+  }
+
   const menuItems = (
     <>
       {song.albumId && (
@@ -75,10 +88,16 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
         {downloading ? "Downloading…" : "Download"}
       </MenuItem>
       {song.canEditLyrics && (
-        <MenuItem onClick={() => setLyricsOpen(true)}>
-          <FileText size={16} />
-          Edit lyrics
-        </MenuItem>
+        <>
+          <MenuItem onClick={() => setLyricsOpen(true)}>
+            <FileText size={16} />
+            Edit lyrics
+          </MenuItem>
+          <MenuItem onClick={handleDelete}>
+            <Trash2 size={16} />
+            Permanently Delete
+          </MenuItem>
+        </>
       )}
     </>
   );

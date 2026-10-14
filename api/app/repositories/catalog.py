@@ -38,7 +38,7 @@ async def get_artist(db: AsyncIOMotorDatabase, artist_id: str) -> dict | None:
 
 
 async def list_artists(db: AsyncIOMotorDatabase) -> list[dict]:
-    return await db.artists.find().sort("sortName", 1).to_list(length=10000)
+    return await db.artists.find().sort([("normalizedName", 1), ("_id", 1)]).to_list(length=10000)
 
 
 async def recount_artist_albums(db: AsyncIOMotorDatabase, artist_id: str) -> None:
@@ -170,9 +170,11 @@ async def list_albums(
     query: dict = {}
     if artist_id:
         query["artistId"] = artist_id
-    sort_field = {"name": "normalizedName", "recent": "createdAt", "year": "year"}.get(sort, "normalizedName")
-    direction = -1 if sort in {"recent"} else 1
-    return await db.albums.find(query).sort(sort_field, direction).skip(skip).limit(limit).to_list(length=limit)
+    sort_spec = {
+        "recent": [("createdAt", -1), ("normalizedName", 1)],
+        "year": [("year", -1), ("normalizedName", 1)],
+    }.get(sort, [("normalizedName", 1), ("_id", 1)])
+    return await db.albums.find(query).sort(sort_spec).skip(skip).limit(limit).to_list(length=limit)
 
 
 async def count_albums(db: AsyncIOMotorDatabase) -> int:

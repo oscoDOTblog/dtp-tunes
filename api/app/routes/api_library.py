@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -10,8 +13,38 @@ from app.models import AlbumOut, ArtistOut, GenreOut, LyricsOut, LyricsUpdate, S
 from app.repositories import catalog as catalog_repo
 from app.repositories import social as social_repo
 from app.services.lyrics import LyricsSidecar, delete_sidecar, lyrics_fields, normalize_lyrics, write_sidecar
+from app.services.media import resolve_music_path
 
 router = APIRouter(prefix="/api", tags=["library"])
+
+
+def _delete_song_files(relative_path: str) -> None:
+    try:
+        audio_path = resolve_music_path(relative_path)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return
+        raise
+    sidecar_path = os.path.splitext(audio_path)[0] + ".txt"
+    try:
+        os.unlink(audio_path)
+        try:
+            os.unlink(sidecar_path)
+        except FileNotFoundError:
+            pass
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Unable to delete media file") from exc
+
+
+async def _delete_song_records(db: AsyncIOMotorDatabase, song_ids: list[str]) -> None:
+    if not song_ids:
+        return
+    await db.songs.delete_many({"_id": {"$in": song_ids}})
+    await db.stars.delete_many({"itemId": {"$in": song_ids}, "itemType": "song"})
+    await db.playHistory.delete_many({"songId": {"$in": song_ids}})
+    await db.playlists.update_many({}, {"$pull": {"songIds": {"$in": song_ids}}})
+    await db.playQueues.update_many({}, {"$pull": {"songIds": {"$in": song_ids}}})
+    await db.playQueues.update_many({"current": {"$in": song_ids}}, {"$set": {"current": None, "position": 0}})
 
 
 def artist_out(doc: dict) -> ArtistOut:
@@ -48,7 +81,7 @@ async def get_artist(artist_id: str, db: AsyncIOMotorDatabase = Depends(get_db),
     artist = await catalog_repo.get_artist(db, artist_id)
     if not artist:
         raise HTTPException(status_code=404, detail="Artist not found")
-    albums = await catalog_repo.list_albums(db, artist_id=artist_id)
+    albums = await catalog_repo.list_albums(db, artist_id=artist_id, sort="year")
     return {"artist": artist_out(artist), "albums": [album_out(a) for a in albums]}
 
 
@@ -166,3 +199,51 @@ async def remove_song_lyrics(
     delete_sidecar(song["path"])
     await catalog_repo.set_song_lyrics(db, song_id, lyrics_fields(LyricsSidecar(None, None, None)))
     return LyricsOut(lyrics=None, hasLyrics=False)
+
+
+@router.delete("/songs/{song_id}")
+async def permanently_delete_song(
+    song_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    _: dict = Depends(require_admin),
+) -> dict:
+    song = await catalog_repo.get_song(db, song_id)
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    await asyncio.to_thread(_delete_song_files, song["path"])
+    await _delete_song_records(db, [song_id])
+    if song.get("albumId"):
+        await catalog_repo.recount_album_songs(db, song["albumId"])
+    await catalog_repo.delete_orphan_albums(db)
+    await catalog_repo.delete_orphan_artists(db)
+    await catalog_repo.recount_genres(db)
+    return {"ok": True}
+
+
+@router.delete("/albums/{album_id}")
+async def permanently_delete_album(
+    album_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    _: dict = Depends(require_admin),
+) -> dict:
+    album = await catalog_repo.get_album(db, album_id)
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    songs = await catalog_repo.list_songs_by_album(db, album_id)
+    for song in songs:
+        await asyncio.to_thread(_delete_song_files, song["path"])
+    cover_path = album.get("coverArtPath")
+    if cover_path:
+        from app.services.cover_art import resolve_cache_path
+        cached_cover = resolve_cache_path(cover_path)
+        if cached_cover:
+            try:
+                os.unlink(cached_cover)
+            except OSError as exc:
+                raise HTTPException(status_code=500, detail="Unable to delete cached album cover") from exc
+    await _delete_song_records(db, [song["_id"] for song in songs])
+    await db.albums.delete_one({"_id": album_id})
+    await db.stars.delete_many({"itemId": album_id, "itemType": "album"})
+    await catalog_repo.delete_orphan_artists(db)
+    await catalog_repo.recount_genres(db)
+    return {"ok": True, "deletedSongs": len(songs)}

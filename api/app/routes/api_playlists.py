@@ -146,9 +146,9 @@ async def update_playlist(
     if body.songIdsToAdd:
         existing = set(song_ids)
         duplicates = [sid for sid in body.songIdsToAdd if sid in existing]
-        if duplicates:
+        if duplicates and len(body.songIdsToAdd) == 1:
             raise HTTPException(status_code=409, detail="Song is already in this playlist")
-        song_ids.extend(body.songIdsToAdd)
+        song_ids.extend(sid for sid in body.songIdsToAdd if sid not in existing)
 
     await playlists_repo.update_playlist_meta(db, playlist_id, name=body.name, comment=body.comment, public=body.public)
     await playlists_repo.replace_songs(db, playlist_id, song_ids)

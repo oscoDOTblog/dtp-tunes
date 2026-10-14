@@ -13,16 +13,20 @@ import type { Playlist, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface SaveToPlaylistDialogProps {
-  song: Song;
+  song?: Song;
+  songs?: Song[];
   open: boolean;
   onClose: () => void;
 }
 
-export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDialogProps) {
+export function SaveToPlaylistDialog({ song, songs, open, onClose }: SaveToPlaylistDialogProps) {
+  const selectedSongs = songs ?? (song ? [song] : []);
+  const songIds = selectedSongs.map((item) => item.id);
+  const isAlbum = selectedSongs.length > 1;
   const toast = useToast();
   const bumpPlaylists = usePlaylistsRefresh((s) => s.bump);
   const { data: playlists, isLoading, error, refetch } = useFetch<Playlist[]>(
-    open ? `/api/playlists?sort=recent&songId=${encodeURIComponent(song.id)}` : null
+    open ? `/api/playlists?sort=recent${song ? `&songId=${encodeURIComponent(song.id)}` : ""}` : null
   );
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -38,9 +42,9 @@ export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDial
     }
     setBusyId(playlist.id);
     try {
-      await api.patch(`/api/playlists/${playlist.id}`, { songIdsToAdd: [song.id] });
+      await api.patch(`/api/playlists/${playlist.id}`, { songIdsToAdd: songIds });
       bumpPlaylists();
-      toast.success(`Added to “${playlist.name}”`);
+      toast.success(`${isAlbum ? "Album added" : "Added"} to “${playlist.name}”`);
       onClose();
     } catch (err) {
       const message =
@@ -63,10 +67,10 @@ export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDial
     try {
       const created = await api.post<Playlist>("/api/playlists", {
         name: trimmed,
-        songIds: [song.id],
+        songIds,
       });
       bumpPlaylists();
-      toast.success(`Created “${created.name}” and added song`);
+      toast.success(`Created “${created.name}” and added ${isAlbum ? "album" : "song"}`);
       setName("");
       setCreating(false);
       onClose();
@@ -105,7 +109,7 @@ export function SaveToPlaylistDialog({ song, open, onClose }: SaveToPlaylistDial
 
         <div className="scrollbar-none flex-1 overflow-y-auto px-5 py-4">
           <p className="mb-4 truncate text-sm text-fg-secondary">
-            Adding <span className="text-fg-primary">{song.title}</span>
+            Adding <span className="text-fg-primary">{isAlbum ? `${selectedSongs.length} tracks` : selectedSongs[0]?.title}</span>
           </p>
 
           {isLoading && <p className="text-sm text-fg-muted">Loading playlists…</p>}
