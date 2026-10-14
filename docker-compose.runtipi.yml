@@ -14,6 +14,11 @@
 #   - See docs/RUNTIPI_DEPLOYMENT.md
 
 services:
+  config-check:
+    environment:
+      APP_PUBLIC_URL: https://${DTP_TUNES_DOMAIN}
+      CORS_ORIGINS: https://${DTP_TUNES_DOMAIN}
+
   gateway:
     networks:
       - default

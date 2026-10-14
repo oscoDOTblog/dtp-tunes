@@ -27,6 +27,13 @@ stack behind Runtipi Traefik on a public custom domain.
 
 ## Quick start
 
+Compose runs an environment preflight before starting the API. Missing or
+placeholder values for `ADMIN_PASSWORD`, `APP_ENCRYPTION_KEY`, or
+`MONGODB_URI` are printed as `ERROR` lines and stop deployment. Missing
+optional Apple Music or Google OAuth credentials are printed as `WARNING`
+lines and only disable playlist import. The preflight output never prints
+passwords, keys, or tokens.
+
 1. Copy the example environment file and edit the secrets:
 
    ```bash
@@ -71,6 +78,47 @@ stack behind Runtipi Traefik on a public custom domain.
 6. From **Settings → Library scan**, trigger a scan (one also runs
    automatically shortly after the worker starts, and on the interval set by
    `SCAN_INTERVAL_SECONDS`).
+
+## Isolated local Docker debugging
+
+Do not run the ordinary Compose command locally when `.env` points at the
+production MongoDB. Use the local-debug launcher instead:
+
+```bash
+# Foreground, with image rebuilds
+./local-debug.sh up
+
+# Or detached
+./local-debug.sh up -d
+
+# Stop while preserving local data
+./local-debug.sh down
+
+# Inspect the resolved configuration
+./local-debug.sh config
+```
+
+This mode uses the separate Compose project `dtp-tunes-local` and forces all
+database-using services to connect to
+`mongodb://mongodb:27017/DTP_local`, regardless of the Mongo settings in
+`.env`. Its data lives only in the named Docker volume
+`dtp-tunes-local-mongodb-data`. Local scans create independent song IDs and
+never copy production metadata.
+
+To permanently discard only the local Mongo database:
+
+```bash
+./local-debug.sh reset
+```
+
+The equivalent command without the launcher is:
+
+```bash
+docker compose --project-name dtp-tunes-local --profile bundled-db \
+  --file docker-compose.yml --file docker-compose.local.yml up --build
+```
+
+Production and Runtipi deployment commands are unchanged.
 
 ## Deploy behind Runtipi (custom domain)
 

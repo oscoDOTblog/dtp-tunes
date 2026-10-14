@@ -1,4 +1,13 @@
 services:
+  config-check:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.preflight"]
+    env_file:
+      - .env
+    restart: "no"
+
   gateway:
     image: nginx:1.27-alpine
     # Loopback-only diagnostic port — not reachable from LAN/WAN.
@@ -62,6 +71,8 @@ services:
       - ./cache:/cache
       - ingest-data:/ingest-data
     depends_on:
+      config-check:
+        condition: service_completed_successfully
       ingest-init:
         condition: service_completed_successfully
     healthcheck:

@@ -1,0 +1,46 @@
+# Local-debug isolation overlay.
+#
+# Always use with docker-compose.yml. These explicit environment values take
+# precedence over env_file entries, so a production MONGODB_URI in .env can
+# never be used by the local-debug containers.
+services:
+  config-check:
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DB: DTP_local
+      MONGODB_COLLECTION_PREFIX: tunes_
+
+  api:
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DB: DTP_local
+      MONGODB_COLLECTION_PREFIX: tunes_
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  worker:
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DB: DTP_local
+      MONGODB_COLLECTION_PREFIX: tunes_
+
+  ingest-worker:
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DB: DTP_local
+      MONGODB_COLLECTION_PREFIX: tunes_
+
+  playlist-transfer-worker:
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DB: DTP_local
+      MONGODB_COLLECTION_PREFIX: tunes_
+
+  mongodb:
+    volumes:
+      - mongodb-data-local:/data/db
+
+volumes:
+  mongodb-data-local:
+    name: dtp-tunes-local-mongodb-data
