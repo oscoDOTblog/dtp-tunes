@@ -75,8 +75,8 @@ export default function AddMusicPage() {
         <label className="text-sm text-fg-secondary">Artist<Input value={artist} onChange={(event) => setArtist(event.target.value)} className="mt-1 w-full" /></label>
         <label className="text-sm text-fg-secondary">Year<Input value={year} onChange={(event) => setYear(event.target.value)} className="mt-1 w-full" /></label>
         {thumbnailUrl && <div role="img" aria-label="Source cover preview" className="h-40 w-40 rounded-lg bg-cover bg-center" style={{ backgroundImage: `url(${thumbnailUrl})` }} />}
-        <label className="text-sm text-fg-secondary">Custom cover (JPEG or PNG)
-          <input type="file" accept="image/jpeg,image/png" onChange={(event) => void selectCover(event.target.files?.[0])} className="mt-1 block w-full text-sm" />
+        <label className="text-sm text-fg-secondary">Custom cover (JPEG, PNG, WebP, GIF, or AVIF)
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => void selectCover(event.target.files?.[0])} className="mt-1 block w-full text-sm" />
         </label>
         {cover && <p className="text-xs text-accent">Custom cover selected</p>}
         <div className="flex flex-wrap gap-2">

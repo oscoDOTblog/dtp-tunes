@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { uploadForm, ApiError } from "@/lib/api";
+import { uploadFormWithProgress, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -18,6 +18,7 @@ export default function UploadMusicPage() {
   const [result, setResult] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [tracks, setTracks] = useState<{ id: string; file: File; title: string }[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number } | null>(null);
 
   useEffect(() => {
     if (!cover) { setCoverPreview(null); return; }
@@ -28,18 +29,22 @@ export default function UploadMusicPage() {
 
   if (user?.role !== "admin") return <p className="p-6 text-fg-secondary">Admin access required.</p>;
   async function submit() {
-    setBusy(true); setError(null); setResult(null);
+    setBusy(true); setError(null); setResult(null); setUploadProgress({ loaded: 0, total: 0 });
     const body = new FormData();
     for (const track of tracks) body.append("files", track.file);
     if (cover) body.append("cover", cover);
     body.append("artist", artist); body.append("album", album); body.append("year", year);
     body.append("track_titles", JSON.stringify(tracks.map((track) => track.title)));
     try {
-      const response = await uploadForm<{ count: number; artist: string; album: string; scanError?: string | null }>("/api/admin/ingest/upload", body);
+      const response = await uploadFormWithProgress<{ count: number; artist: string; album: string; scanError?: string | null }>(
+        "/api/admin/ingest/upload",
+        body,
+        (loaded, total) => setUploadProgress({ loaded, total }),
+      );
       setResult(`Saved ${response.count} tracks to ${response.artist} / ${response.album}${response.scanError ? `. Scan failed: ${response.scanError}` : ". Library scan queued."}`);
       setTracks([]); setCover(null);
     } catch (err) { setError(err instanceof ApiError ? err.message : "Upload failed"); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setUploadProgress(null); }
   }
 
   function selectFiles(selected: File[]) {
@@ -81,7 +86,7 @@ export default function UploadMusicPage() {
             {coverPreview ? <img src={coverPreview} alt="Album cover preview" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-4 text-center text-xs text-fg-secondary">No album cover selected</div>}
           </div>
           <label className="cursor-pointer text-center text-sm text-accent hover:underline">{cover ? "Change cover" : "Choose cover"}
-            <input type="file" accept="image/jpeg,image/png" onChange={(event) => setCover(event.target.files?.[0] ?? null)} className="sr-only" />
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => setCover(event.target.files?.[0] ?? null)} className="sr-only" />
           </label>
         </div>
         <div className="flex flex-col gap-3">
@@ -109,6 +114,23 @@ export default function UploadMusicPage() {
     </section>}
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     {result && <p role="status" className="text-sm text-accent">{result}</p>}
+    {busy && uploadProgress && <div className="flex flex-col gap-2" aria-live="polite">
+      <div className="flex justify-between text-sm text-fg-secondary">
+        <span>{uploadProgress.total > 0 && uploadProgress.loaded >= uploadProgress.total ? "Processing files…" : "Uploading files…"}</span>
+        <span>{uploadProgress.total > 0 ? `${Math.round((uploadProgress.loaded / uploadProgress.total) * 100)}%` : "Starting…"}</span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label="File upload progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={uploadProgress.total > 0 ? Math.round((uploadProgress.loaded / uploadProgress.total) * 100) : 0}
+        className="h-2 overflow-hidden rounded-full bg-bg-elevated"
+      >
+        <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: uploadProgress.total > 0 ? `${(uploadProgress.loaded / uploadProgress.total) * 100}%` : "0%" }} />
+      </div>
+      {uploadProgress.total > 0 && <p className="text-xs text-fg-secondary">{formatSize(uploadProgress.loaded)} of {formatSize(uploadProgress.total)}</p>}
+    </div>}
     <div className="flex gap-3"><Button onClick={submit} disabled={busy || tracks.length === 0 || tracks.some((track) => !track.title.trim())}>{busy ? "Uploading…" : "Upload to library"}</Button><Link href="/add-music" className="self-center text-sm text-accent">Back</Link></div>
   </div>;
 }

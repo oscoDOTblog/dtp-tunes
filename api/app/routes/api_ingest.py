@@ -105,7 +105,7 @@ def _validate_cover(data: bytes) -> bytes:
     from io import BytesIO
     try:
         image = Image.open(BytesIO(data))
-        if image.format not in {"JPEG", "PNG"}:
+        if image.format not in {"JPEG", "PNG", "WEBP", "GIF", "AVIF"}:
             raise ValueError("Unsupported image format")
         image.verify()
         image = Image.open(BytesIO(data)).convert("RGB")
@@ -113,7 +113,7 @@ def _validate_cover(data: bytes) -> bytes:
         image.save(output, format="JPEG", quality=92)
         return output.getvalue()
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="Cover must be a valid JPEG or PNG") from exc
+        raise HTTPException(status_code=400, detail="Cover must be a valid JPEG, PNG, WebP, GIF, or AVIF") from exc
 
 
 async def _save_upload(upload: UploadFile, destination: Path, max_bytes: int) -> None:

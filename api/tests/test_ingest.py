@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from io import BytesIO
 import wave
 
 import pytest
@@ -11,6 +12,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from mutagen.id3 import ID3, TIT2
 from mutagen.mp3 import MP3
+from PIL import Image
 
 from app.main import app
 from app.routes import api_ingest
@@ -89,6 +91,18 @@ def test_reviewed_upload_titles_are_trimmed_and_validated():
     with pytest.raises(HTTPException) as exc:
         api_ingest._reviewed_track_titles('["Only one"]', 2)
     assert exc.value.status_code == 400
+
+
+@pytest.mark.parametrize("format_", ["WEBP", "GIF", "AVIF"])
+def test_additional_cover_formats_are_normalized_to_jpeg(format_):
+    source = BytesIO()
+    Image.new("RGBA" if format_ == "WEBP" else "RGB", (8, 8), "purple").save(source, format=format_)
+
+    normalized = api_ingest._validate_cover(source.getvalue())
+
+    with Image.open(BytesIO(normalized)) as image:
+        assert image.format == "JPEG"
+        assert image.mode == "RGB"
 
 
 def test_ingest_routes_are_registered():

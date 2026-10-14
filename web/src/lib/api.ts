@@ -64,6 +64,34 @@ export async function uploadForm<T>(path: string, body: FormData): Promise<T> {
   return request<T>(path, { method: "POST", body });
 }
 
+export function uploadFormWithProgress<T>(
+  path: string,
+  body: FormData,
+  onProgress: (loaded: number, total: number) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}${path}`);
+    xhr.withCredentials = true;
+    xhr.responseType = "json";
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) onProgress(event.loaded, event.total);
+    });
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.response as T);
+        return;
+      }
+      const detail = xhr.response && typeof xhr.response === "object"
+        ? (xhr.response as { detail?: unknown }).detail
+        : undefined;
+      reject(new ApiError(xhr.status, detailMessage(detail, xhr.statusText || "Upload failed")));
+    });
+    xhr.addEventListener("error", () => reject(new ApiError(0, "Upload failed: network error")));
+    xhr.send(body);
+  });
+}
+
 export function streamUrl(songId: string): string {
   return `${API_BASE}/api/stream/${songId}`;
 }
