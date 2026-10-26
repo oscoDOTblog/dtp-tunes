@@ -74,8 +74,10 @@ export default function UploadMusicPage() {
 
   return <div className="mx-auto flex max-w-3xl flex-col gap-5 p-6 pb-32">
     <div><h1 className="text-3xl font-bold text-fg-primary">Upload audio</h1><p className="text-sm text-fg-secondary">Choose files, then review the album and track list before anything is uploaded.</p></div>
-    <label className="rounded-xl border border-dashed border-border-subtle bg-bg-elevated p-6 text-sm text-fg-secondary">Choose MP3, FLAC, M4A, Ogg, Opus, or WAV files
-      <input type="file" multiple accept=".mp3,.flac,.m4a,.ogg,.opus,.wav,audio/mpeg,audio/flac,audio/mp4,audio/ogg,audio/opus,audio/wav" onChange={(event) => selectFiles(Array.from(event.target.files ?? []))} className="mt-3 block w-full" />
+    <label className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border-subtle bg-bg-elevated p-8 text-center transition-colors hover:border-accent hover:bg-bg-hover focus-within:border-accent">
+      <span className="inline-flex h-12 items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-black">Choose audio files</span>
+      <span className="text-sm text-fg-secondary">MP3, FLAC, M4A, Ogg, Opus, or WAV</span>
+      <input type="file" multiple accept=".mp3,.flac,.m4a,.ogg,.opus,.wav,audio/mpeg,audio/flac,audio/mp4,audio/ogg,audio/opus,audio/wav" onChange={(event) => selectFiles(Array.from(event.target.files ?? []))} className="sr-only" />
     </label>
     {tracks.length > 0 && <section className="flex flex-col gap-5 rounded-xl border border-border-subtle bg-bg-elevated p-5">
       <h2 className="text-lg font-semibold text-fg-primary">Review album details</h2>
@@ -130,6 +132,6 @@ export default function UploadMusicPage() {
       </div>
       {uploadProgress.total > 0 && <p className="text-xs text-fg-secondary">{formatSize(uploadProgress.loaded)} of {formatSize(uploadProgress.total)}</p>}
     </div>}
-    <div className="flex gap-3"><Button onClick={submit} disabled={busy || tracks.length === 0 || tracks.some((track) => !track.title.trim())}>{busy ? "Uploading…" : "Upload to library"}</Button><Link href="/add-music" className="self-center text-sm text-accent">Back</Link></div>
+    <div className="flex gap-3"><Button onClick={submit} disabled={busy || tracks.length === 0 || tracks.some((track) => !track.title.trim())}>{busy ? "Uploading…" : "Upload to library"}</Button><Link href="/add-music" className="self-center text-sm text-accent">Back to upload options</Link></div>
   </div>;
 }
