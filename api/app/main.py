@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db import close_connection, ensure_indexes
-from app.routes import api_admin, api_auth, api_ingest, api_library, api_media, api_player, api_playlists, health, subsonic
+from app.routes import api_admin, api_auth, api_ingest, api_library, api_media, api_player, api_playlists, api_playlist_transfers, health, subsonic
 from app.services.auth_service import bootstrap_admin
 from app.services.transfer_logging import TransferLoggingMiddleware
 
@@ -52,6 +52,7 @@ app.include_router(health.router)
 app.include_router(api_auth.router)
 app.include_router(api_library.router)
 app.include_router(api_playlists.router)
+app.include_router(api_playlist_transfers.router)
 app.include_router(api_player.router)
 app.include_router(api_media.router)
 app.include_router(api_admin.router)

@@ -1,4 +1,13 @@
 services:
+  config-check:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.preflight"]
+    env_file:
+      - .env
+    restart: "no"
+
   gateway:
     image: nginx:1.27-alpine
     # Loopback-only diagnostic port — not reachable from LAN/WAN.
@@ -62,6 +71,8 @@ services:
       - ./cache:/cache
       - ingest-data:/ingest-data
     depends_on:
+      config-check:
+        condition: service_completed_successfully
       ingest-init:
         condition: service_completed_successfully
     healthcheck:
@@ -106,6 +117,19 @@ services:
     volumes:
       - "${MUSIC_HOST_PATH:-./music}:/music"
       - ingest-data:/ingest-data
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  playlist-transfer-worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    user: "${PUID:-1001}:${PGID:-1001}"
+    command: ["python", "-m", "app.worker.playlist_transfer"]
+    env_file:
+      - .env
     depends_on:
       api:
         condition: service_healthy

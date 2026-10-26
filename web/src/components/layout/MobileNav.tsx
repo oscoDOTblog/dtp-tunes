@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Search, Library, Settings, Music2 } from "lucide-react";
+import { Home, Search, Library, Settings, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/useAuth";
 
@@ -18,7 +18,7 @@ export function MobileNav() {
   const pathname = usePathname();
   return (
     <nav className="flex h-16 flex-shrink-0 items-center justify-around border-t border-border-subtle bg-bg-elevated md:hidden">
-      {(user?.role === "admin" ? [...items, { href: "/add-music", label: "Add Music", icon: Music2 }] : items).map(({ href, label, icon: Icon }) => {
+      {(user?.role === "admin" ? [...items, { href: "/import-playlist", label: "Import", icon: ArrowRightLeft }] : items).map(({ href, label, icon: Icon }) => {
         const active = pathname === href;
         return (
           <Link

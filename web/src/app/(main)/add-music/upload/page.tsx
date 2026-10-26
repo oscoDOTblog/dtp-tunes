@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { uploadFormWithProgress, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
@@ -20,12 +20,11 @@ export default function UploadMusicPage() {
   const [tracks, setTracks] = useState<{ id: string; file: File; title: string }[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number } | null>(null);
 
-  useEffect(() => {
-    if (!cover) { setCoverPreview(null); return; }
-    const url = URL.createObjectURL(cover);
-    setCoverPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [cover]);
+  function selectCover(file: File | null) {
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+    setCover(file);
+    setCoverPreview(file ? URL.createObjectURL(file) : null);
+  }
 
   if (user?.role !== "admin") return <p className="p-6 text-fg-secondary">Admin access required.</p>;
   async function submit() {
@@ -42,7 +41,7 @@ export default function UploadMusicPage() {
         (loaded, total) => setUploadProgress({ loaded, total }),
       );
       setResult(`Saved ${response.count} tracks to ${response.artist} / ${response.album}${response.scanError ? `. Scan failed: ${response.scanError}` : ". Library scan queued."}`);
-      setTracks([]); setCover(null);
+      setTracks([]); selectCover(null);
     } catch (err) { setError(err instanceof ApiError ? err.message : "Upload failed"); }
     finally { setBusy(false); setUploadProgress(null); }
   }
@@ -75,8 +74,10 @@ export default function UploadMusicPage() {
 
   return <div className="mx-auto flex max-w-3xl flex-col gap-5 p-6 pb-32">
     <div><h1 className="text-3xl font-bold text-fg-primary">Upload audio</h1><p className="text-sm text-fg-secondary">Choose files, then review the album and track list before anything is uploaded.</p></div>
-    <label className="rounded-xl border border-dashed border-border-subtle bg-bg-elevated p-6 text-sm text-fg-secondary">Choose MP3, FLAC, M4A, Ogg, Opus, or WAV files
-      <input type="file" multiple accept=".mp3,.flac,.m4a,.ogg,.opus,.wav,audio/mpeg,audio/flac,audio/mp4,audio/ogg,audio/opus,audio/wav" onChange={(event) => selectFiles(Array.from(event.target.files ?? []))} className="mt-3 block w-full" />
+    <label className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border-subtle bg-bg-elevated p-8 text-center transition-colors hover:border-accent hover:bg-bg-hover focus-within:border-accent">
+      <span className="inline-flex h-12 items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-black">Choose audio files</span>
+      <span className="text-sm text-fg-secondary">MP3, FLAC, M4A, Ogg, Opus, or WAV</span>
+      <input type="file" multiple accept=".mp3,.flac,.m4a,.ogg,.opus,.wav,audio/mpeg,audio/flac,audio/mp4,audio/ogg,audio/opus,audio/wav" onChange={(event) => selectFiles(Array.from(event.target.files ?? []))} className="sr-only" />
     </label>
     {tracks.length > 0 && <section className="flex flex-col gap-5 rounded-xl border border-border-subtle bg-bg-elevated p-5">
       <h2 className="text-lg font-semibold text-fg-primary">Review album details</h2>
@@ -86,7 +87,7 @@ export default function UploadMusicPage() {
             {coverPreview ? <img src={coverPreview} alt="Album cover preview" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-4 text-center text-xs text-fg-secondary">No album cover selected</div>}
           </div>
           <label className="cursor-pointer text-center text-sm text-accent hover:underline">{cover ? "Change cover" : "Choose cover"}
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => setCover(event.target.files?.[0] ?? null)} className="sr-only" />
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => selectCover(event.target.files?.[0] ?? null)} className="sr-only" />
           </label>
         </div>
         <div className="flex flex-col gap-3">
@@ -131,6 +132,6 @@ export default function UploadMusicPage() {
       </div>
       {uploadProgress.total > 0 && <p className="text-xs text-fg-secondary">{formatSize(uploadProgress.loaded)} of {formatSize(uploadProgress.total)}</p>}
     </div>}
-    <div className="flex gap-3"><Button onClick={submit} disabled={busy || tracks.length === 0 || tracks.some((track) => !track.title.trim())}>{busy ? "Uploading…" : "Upload to library"}</Button><Link href="/add-music" className="self-center text-sm text-accent">Back</Link></div>
+    <div className="flex gap-3"><Button onClick={submit} disabled={busy || tracks.length === 0 || tracks.some((track) => !track.title.trim())}>{busy ? "Uploading…" : "Upload to library"}</Button><Link href="/add-music" className="self-center text-sm text-accent">Back to upload options</Link></div>
   </div>;
 }
