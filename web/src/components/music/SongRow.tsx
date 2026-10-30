@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Pause, Play, Heart, MoreVertical, ListPlus, Download, FileText, Disc3, Trash2 } from "lucide-react";
+import { Pause, Play, Heart, MoreVertical, ListPlus, Download, FileText, Disc3, Trash2, ListEnd, PlaySquare } from "lucide-react";
 import type { Song } from "@/lib/types";
 import { api, coverUrl, downloadFile, songDownloadUrl } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
@@ -29,6 +29,8 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
   const currentSong = usePlayerStore((s) => s.currentSong());
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playQueue = usePlayerStore((s) => s.playQueue);
+  const playNext = usePlayerStore((s) => s.playNext);
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const [saveOpen, setSaveOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
@@ -73,6 +75,20 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
 
   const menuItems = (
     <>
+      <MenuItem onClick={() => {
+        playNext(song);
+        toast.success(`Playing “${song.title}” next`);
+      }}>
+        <PlaySquare size={16} />
+        Play next
+      </MenuItem>
+      <MenuItem onClick={() => {
+        addToQueue(song);
+        toast.success(`Added “${song.title}” to queue`);
+      }}>
+        <ListEnd size={16} />
+        Add to queue
+      </MenuItem>
       {song.albumId && (
         <MenuItem onClick={() => router.push(`/album/${encodeURIComponent(song.albumId!)}`)}>
           <Disc3 size={16} />

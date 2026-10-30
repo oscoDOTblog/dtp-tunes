@@ -73,14 +73,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   addToQueue: (song) => {
-    set((state) => ({ queue: [...state.queue, song] }));
+    set((state) => ({
+      queue: [...state.queue, song],
+      currentIndex: state.currentIndex === -1 ? 0 : state.currentIndex,
+    }));
   },
 
   playNext: (song) => {
     set((state) => {
       const insertAt = state.currentIndex + 1;
       const queue = [...state.queue.slice(0, insertAt), song, ...state.queue.slice(insertAt)];
-      return { queue };
+      return state.currentIndex === -1
+        ? { queue, currentIndex: 0, isPlaying: true, currentTime: 0 }
+        : { queue };
     });
   },
 
