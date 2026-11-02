@@ -14,24 +14,47 @@ from app.config import get_settings
 logger = logging.getLogger("dtp_tunes.worker.artwork")
 
 MAX_DIMENSION = 1000
+JPEG_QUALITY = 90
+
+
+def optimize_cover(raw_bytes: bytes) -> bytes | None:
+    """Center-crop to a square and re-encode as JPEG.
+
+    Album art is rendered in square players, so a 16:9 YouTube thumbnail would
+    otherwise be cropped by each client (and look blurry). Returns None when the
+    bytes are not a decodable image.
+    """
+    try:
+        image = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+        side = min(image.size)
+        left = (image.width - side) // 2
+        top = (image.height - side) // 2
+        image = image.crop((left, top, left + side, top + side))
+        if side > MAX_DIMENSION:
+            image = image.resize((MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS)
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=JPEG_QUALITY)
+        return buffer.getvalue()
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to process cover art", exc_info=True)
+        return None
 
 
 def save_album_cover(album_id: str, raw_bytes: bytes) -> str | None:
-    """Saves a resized JPEG under CACHE_PATH/covers/{albumId}.jpg. Returns the relative path."""
+    """Saves a square JPEG under CACHE_PATH/covers/{albumId}.jpg. Returns the relative path."""
     settings = get_settings()
     covers_dir = os.path.join(settings.cache_path, "covers")
     os.makedirs(covers_dir, exist_ok=True)
     relative_path = os.path.join("covers", f"{album_id}.jpg")
     absolute_path = os.path.join(settings.cache_path, relative_path)
 
-    try:
-        image = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
-        image.thumbnail((MAX_DIMENSION, MAX_DIMENSION))
-        image.save(absolute_path, format="JPEG", quality=88)
-        return relative_path
-    except Exception:  # noqa: BLE001
-        logger.warning("Failed to save cover art for album %s", album_id, exc_info=True)
+    optimized = optimize_cover(raw_bytes)
+    if optimized is None:
+        logger.warning("Failed to save cover art for album %s", album_id)
         return None
+    with open(absolute_path, "wb") as output:
+        output.write(optimized)
+    return relative_path
 
 
 def clear_cover_cache() -> int:

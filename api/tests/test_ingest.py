@@ -17,6 +17,8 @@ from PIL import Image
 from app.main import app
 from app.routes import api_ingest
 from app.services import ingest
+from app.worker.artwork import optimize_cover
+from app.worker.ingest import _first_track_thumbnail
 
 
 def _mp3(path: Path) -> None:
@@ -103,6 +105,51 @@ def test_additional_cover_formats_are_normalized_to_jpeg(format_):
     with Image.open(BytesIO(normalized)) as image:
         assert image.format == "JPEG"
         assert image.mode == "RGB"
+
+
+def test_optimize_cover_center_crops_wide_art_to_square():
+    source = BytesIO()
+    image = Image.new("RGB", (1280, 720), "black")
+    image.paste((255, 0, 0), (0, 0, 160, 720))  # left band should be cropped away
+    image.save(source, format="JPEG")
+
+    optimized = optimize_cover(source.getvalue())
+
+    with Image.open(BytesIO(optimized)) as result:
+        assert result.size == (720, 720)
+        assert result.getpixel((0, 360))[0] < 100
+
+
+def test_promote_tracks_writes_square_cover(tmp_path, monkeypatch):
+    music = tmp_path / "music"
+    music.mkdir()
+    monkeypatch.setattr(ingest, "get_settings", lambda: SimpleNamespace(music_path=str(music)))
+    source = tmp_path / "source.mp3"
+    _mp3(source)
+    cover = BytesIO()
+    Image.new("RGB", (1280, 720), "teal").save(cover, format="JPEG")
+
+    ingest.promote_tracks([(source, "Song")], artist="Artist", album="Album", cover=cover.getvalue())
+
+    with Image.open(music / "Artist" / "Album" / "cover.jpg") as saved:
+        assert saved.size == (720, 720)
+
+
+def test_first_track_thumbnail_ignores_playlist_artwork(tmp_path):
+    track = tmp_path / "01 - Song.mp3"
+    track.write_bytes(b"audio")
+    (tmp_path / "00 - Playlist.jpg").write_bytes(b"tiny playlist thumb")
+    (tmp_path / "01 - Song.jpg").write_bytes(b"maxres track thumb")
+
+    assert _first_track_thumbnail(track) == tmp_path / "01 - Song.jpg"
+
+
+def test_first_track_thumbnail_is_optional(tmp_path):
+    track = tmp_path / "01 - Song.mp3"
+    track.write_bytes(b"audio")
+    (tmp_path / "00 - Playlist.jpg").write_bytes(b"tiny playlist thumb")
+
+    assert _first_track_thumbnail(track) is None
 
 
 def test_ingest_routes_are_registered():

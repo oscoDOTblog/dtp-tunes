@@ -7,15 +7,37 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel, Field
 
 from app.deps import get_db, require_admin, require_user
 from app.models import AlbumOut, ArtistOut, GenreOut, LyricsOut, LyricsUpdate, SearchResult, SongOut
+from app.repositories.base import normalize
 from app.repositories import catalog as catalog_repo
 from app.repositories import social as social_repo
 from app.services.lyrics import LyricsSidecar, delete_sidecar, lyrics_fields, normalize_lyrics, write_sidecar
 from app.services.media import resolve_music_path
 
 router = APIRouter(prefix="/api", tags=["library"])
+
+
+class AlbumMergeInput(BaseModel):
+    sourceAlbumId: str
+    targetAlbumId: str
+
+
+class AlbumMetadataUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=300)
+    year: int | None = Field(default=None, ge=1, le=9999)
+    genre: str | None = Field(default=None, max_length=100)
+
+
+class SongMetadataUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=300)
+    artistName: str | None = Field(default=None, max_length=300)
+    year: int | None = Field(default=None, ge=1, le=9999)
+    genre: str | None = Field(default=None, max_length=100)
+    track: int | None = Field(default=None, ge=1)
+    discNumber: int | None = Field(default=None, ge=1)
 
 
 def _delete_song_files(relative_path: str) -> None:
@@ -247,3 +269,77 @@ async def permanently_delete_album(
     await catalog_repo.delete_orphan_artists(db)
     await catalog_repo.recount_genres(db)
     return {"ok": True, "deletedSongs": len(songs)}
+
+
+@router.post("/admin/albums/merge")
+async def merge_albums(
+    payload: AlbumMergeInput,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    _: dict = Depends(require_admin),
+) -> dict:
+    if payload.sourceAlbumId == payload.targetAlbumId:
+        raise HTTPException(status_code=400, detail="Source and destination albums must be different")
+    source = await catalog_repo.get_album(db, payload.sourceAlbumId)
+    target = await catalog_repo.get_album(db, payload.targetAlbumId)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source album not found")
+    if not target:
+        raise HTTPException(status_code=404, detail="Destination album not found")
+    moved_songs = await catalog_repo.merge_albums(db, source=source, target=target)
+    return {
+        "ok": True,
+        "movedSongs": moved_songs,
+        "sourceAlbumId": source["_id"],
+        "targetAlbumId": target["_id"],
+    }
+
+
+@router.patch("/admin/albums/{album_id}")
+async def update_album_metadata(
+    album_id: str,
+    payload: AlbumMetadataUpdate,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    _: dict = Depends(require_admin),
+) -> AlbumOut:
+    album = await catalog_repo.get_album(db, album_id)
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    fields = payload.model_dump(exclude_unset=True)
+    if "name" in fields:
+        fields["name"] = (fields["name"] or "").strip()
+        if not fields["name"]:
+            raise HTTPException(status_code=400, detail="Album name cannot be empty")
+        duplicate = await db.albums.find_one({
+            "_id": {"$ne": album_id},
+            "artistId": album.get("artistId"),
+            "normalizedName": normalize(fields["name"]),
+        })
+        if duplicate:
+            raise HTTPException(status_code=409, detail="That artist already has an album with this name; merge the albums instead")
+    if "genre" in fields:
+        fields["genre"] = (fields["genre"] or "").strip() or None
+    updated = await catalog_repo.update_album_metadata(db, album, fields)
+    await catalog_repo.recount_genres(db)
+    return album_out(updated)
+
+
+@router.patch("/admin/songs/{song_id}")
+async def update_song_metadata(
+    song_id: str,
+    payload: SongMetadataUpdate,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    _: dict = Depends(require_admin),
+) -> SongOut:
+    song = await catalog_repo.get_song(db, song_id)
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    fields = payload.model_dump(exclude_unset=True)
+    if "title" in fields:
+        fields["title"] = (fields["title"] or "").strip()
+        if not fields["title"]:
+            raise HTTPException(status_code=400, detail="Song title cannot be empty")
+    for field in ("artistName", "genre"):
+        if field in fields:
+            fields[field] = (fields[field] or "").strip() or None
+    updated = await catalog_repo.update_song_metadata(db, song, fields)
+    return song_out(updated, can_edit_lyrics=True)

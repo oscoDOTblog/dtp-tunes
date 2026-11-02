@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { KeyRound, Loader2, RefreshCcw, Trash2, UserPlus, Copy, Check, DatabaseZap, Eye, EyeOff, RotateCw } from "lucide-react";
+import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
+import { KeyRound, Loader2, RefreshCcw, Trash2, UserPlus, Copy, Check, DatabaseZap, Eye, EyeOff, RotateCw, Combine } from "lucide-react";
 import { useAuth } from "@/lib/useAuth";
 import { useFetch } from "@/lib/useFetch";
 import { api, ApiError } from "@/lib/api";
@@ -15,7 +15,7 @@ import {
 } from "@/lib/accent";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import type { ApiKey, ScanJob, User } from "@/lib/types";
+import type { Album, ApiKey, ScanJob, Song, User } from "@/lib/types";
 
 function AppearanceSection() {
   const accent = useSyncExternalStore(subscribeAccent, getStoredAccent, getServerAccent);
@@ -294,6 +294,218 @@ function AdminUsersSection() {
   );
 }
 
+function albumLabel(album: Album): string {
+  return `${album.artistName ?? "Unknown Artist"} — ${album.name} (${album.songCount} song${album.songCount === 1 ? "" : "s"})`;
+}
+
+function AdminAlbumMergeSection() {
+  const { data: albums, refetch } = useFetch<Album[]>("/api/albums?limit=200&sort=name");
+  const [sourceId, setSourceId] = useState("");
+  const [targetId, setTargetId] = useState("");
+  const [merging, setMerging] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const source = albums?.find((album) => album.id === sourceId);
+  const target = albums?.find((album) => album.id === targetId);
+
+  async function merge() {
+    if (!source || !target || source.id === target.id) return;
+    const confirmed = window.confirm(
+      `Merge “${source.name}” by ${source.artistName ?? "Unknown Artist"} into “${target.name}” by ${target.artistName ?? "Unknown Artist"}?\n\n` +
+      `${source.songCount} song${source.songCount === 1 ? "" : "s"} will move to the destination album and the source album will be removed. Audio files, playlists, history, and song IDs are preserved.`,
+    );
+    if (!confirmed) return;
+
+    setMerging(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const result = await api.post<{ movedSongs: number }>("/api/admin/albums/merge", {
+        sourceAlbumId: source.id,
+        targetAlbumId: target.id,
+      });
+      setMessage(`Merged ${result.movedSongs} song${result.movedSongs === 1 ? "" : "s"} into “${target.name}”.`);
+      setSourceId("");
+      setTargetId("");
+      refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to merge albums");
+    } finally {
+      setMerging(false);
+    }
+  }
+
+  const selectClass = "h-11 w-full rounded-lg border border-border-subtle bg-bg-elevated-2 px-3 text-sm text-fg-primary outline-none focus:border-accent";
+
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="text-lg font-semibold text-fg-primary">Merge albums</h2>
+      <p className="text-sm text-fg-secondary">
+        Move every song from one album into another and remove the empty source album. The destination album&apos;s name and metadata take precedence.
+      </p>
+      <div className="grid max-w-3xl gap-4 md:grid-cols-[1fr_auto_1fr] md:items-end">
+        <label className="flex flex-col gap-1 text-xs text-fg-secondary">
+          Source album (removed)
+          <select className={selectClass} value={sourceId} onChange={(event) => setSourceId(event.target.value)}>
+            <option value="">Choose source…</option>
+            {(albums ?? []).map((album) => <option key={album.id} value={album.id}>{albumLabel(album)}</option>)}
+          </select>
+        </label>
+        <span className="hidden pb-3 text-fg-muted md:block">→</span>
+        <label className="flex flex-col gap-1 text-xs text-fg-secondary">
+          Destination album (kept)
+          <select className={selectClass} value={targetId} onChange={(event) => setTargetId(event.target.value)}>
+            <option value="">Choose destination…</option>
+            {(albums ?? []).filter((album) => album.id !== sourceId).map((album) => <option key={album.id} value={album.id}>{albumLabel(album)}</option>)}
+          </select>
+        </label>
+      </div>
+      <Button className="w-fit" onClick={merge} disabled={merging || !source || !target || source.id === target.id}>
+        {merging ? <Loader2 size={16} className="animate-spin" /> : <Combine size={16} />}
+        {merging ? "Merging…" : "Merge albums"}
+      </Button>
+      {message && <p className="text-sm text-fg-primary">{message}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
+    </section>
+  );
+}
+
+interface AlbumDetail {
+  album: Album;
+  songs: Song[];
+}
+
+function optionalNumber(value: string): number | null {
+  return value.trim() ? Number(value) : null;
+}
+
+function AdminMetadataEditorSection() {
+  const { data: albums, refetch: refetchAlbums } = useFetch<Album[]>("/api/albums?limit=200&sort=name");
+  const [albumId, setAlbumId] = useState("");
+  const { data, refetch } = useFetch<AlbumDetail>(albumId ? `/api/albums/${albumId}` : null, [albumId]);
+  const [songId, setSongId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const song = data?.songs.find((item) => item.id === songId);
+
+  async function saveAlbum(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!data) return;
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") ?? "").trim();
+    if (!name) return;
+    setSaving(true);
+    setMessage(null);
+    setError(null);
+    try {
+      await api.patch(`/api/admin/albums/${data.album.id}`, {
+        name,
+        year: optionalNumber(String(form.get("year") ?? "")),
+        genre: String(form.get("genre") ?? "").trim() || null,
+      });
+      setMessage("Album information saved.");
+      refetch();
+      refetchAlbums();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to save album information");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveSong(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!song) return;
+    const form = new FormData(event.currentTarget);
+    const title = String(form.get("title") ?? "").trim();
+    if (!title) return;
+    setSaving(true);
+    setMessage(null);
+    setError(null);
+    try {
+      await api.patch(`/api/admin/songs/${song.id}`, {
+        title,
+        artistName: String(form.get("artistName") ?? "").trim() || null,
+        year: optionalNumber(String(form.get("year") ?? "")),
+        genre: String(form.get("genre") ?? "").trim() || null,
+        track: optionalNumber(String(form.get("track") ?? "")),
+        discNumber: optionalNumber(String(form.get("discNumber") ?? "")),
+      });
+      setMessage("Song information saved.");
+      refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to save song information");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const selectClass = "h-11 w-full rounded-lg border border-border-subtle bg-bg-elevated-2 px-3 text-sm text-fg-primary outline-none focus:border-accent";
+  const fieldClass = "flex flex-col gap-1 text-xs text-fg-secondary";
+
+  return (
+    <section className="flex flex-col gap-5">
+      <div>
+        <h2 className="text-lg font-semibold text-fg-primary">Edit library information</h2>
+        <p className="mt-1 text-sm text-fg-secondary">Edit catalog metadata without changing song IDs, files, playlists, or listening history.</p>
+      </div>
+      <label className={`${fieldClass} max-w-2xl`}>
+        Album
+        <select className={selectClass} value={albumId} onChange={(event) => { setAlbumId(event.target.value); setSongId(""); }}>
+          <option value="">Choose an album…</option>
+          {(albums ?? []).map((album) => <option key={album.id} value={album.id}>{albumLabel(album)}</option>)}
+        </select>
+      </label>
+
+      {data && (
+        <form key={`${data.album.id}-${data.album.name}-${data.album.year}-${data.album.genre}`} onSubmit={saveAlbum} className="flex max-w-3xl flex-col gap-4 rounded-lg border border-border-subtle bg-bg-elevated p-4">
+          <h3 className="text-sm font-semibold text-fg-primary">Album information</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className={fieldClass}>Name<Input name="name" defaultValue={data.album.name} required /></label>
+            <label className={fieldClass}>Year<Input name="year" type="number" min="1" max="9999" defaultValue={data.album.year ?? ""} /></label>
+            <label className={fieldClass}>Genre<Input name="genre" defaultValue={data.album.genre ?? ""} /></label>
+            <label className={fieldClass}>Album artist<Input defaultValue={data.album.artistName ?? ""} disabled title="Album artist editing is not yet supported" /></label>
+          </div>
+          <Button type="submit" className="w-fit" disabled={saving}>
+            {saving && <Loader2 size={16} className="animate-spin" />} Save album
+          </Button>
+        </form>
+      )}
+
+      {data && data.songs.length > 0 && (
+        <div className="flex max-w-3xl flex-col gap-4 rounded-lg border border-border-subtle bg-bg-elevated p-4">
+          <h3 className="text-sm font-semibold text-fg-primary">Song information</h3>
+          <label className={fieldClass}>
+            Song
+            <select className={selectClass} value={songId} onChange={(event) => setSongId(event.target.value)}>
+              <option value="">Choose a song…</option>
+              {data.songs.map((item) => <option key={item.id} value={item.id}>{item.track ? `${item.track}. ` : ""}{item.title}</option>)}
+            </select>
+          </label>
+          {song && (
+            <form key={`${song.id}-${song.title}-${song.artistName}-${song.year}-${song.genre}-${song.track}-${song.discNumber}`} onSubmit={saveSong} className="flex flex-col gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className={fieldClass}>Title<Input name="title" defaultValue={song.title} required /></label>
+                <label className={fieldClass}>Artist<Input name="artistName" defaultValue={song.artistName ?? ""} /></label>
+                <label className={fieldClass}>Year<Input name="year" type="number" min="1" max="9999" defaultValue={song.year ?? ""} /></label>
+                <label className={fieldClass}>Genre<Input name="genre" defaultValue={song.genre ?? ""} /></label>
+                <label className={fieldClass}>Track number<Input name="track" type="number" min="1" defaultValue={song.track ?? ""} /></label>
+                <label className={fieldClass}>Disc number<Input name="discNumber" type="number" min="1" defaultValue={song.discNumber ?? ""} /></label>
+              </div>
+              <Button type="submit" className="w-fit" disabled={saving}>
+                {saving && <Loader2 size={16} className="animate-spin" />} Save song
+              </Button>
+            </form>
+          )}
+        </div>
+      )}
+      {message && <p className="text-sm text-fg-primary">{message}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
+    </section>
+  );
+}
+
 const SCAN_POLL_INTERVAL_MS = 2000;
 
 function AdminScanSection() {
@@ -408,6 +620,10 @@ export default function SettingsPage() {
         <>
           <hr className="border-border-subtle" />
           <AdminScanSection />
+          <hr className="border-border-subtle" />
+          <AdminAlbumMergeSection />
+          <hr className="border-border-subtle" />
+          <AdminMetadataEditorSection />
           <hr className="border-border-subtle" />
           <AdminUsersSection />
         </>

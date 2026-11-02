@@ -15,6 +15,7 @@ from mutagen.id3 import APIC, ID3, TALB, TDRC, TIT2, TPE1, TRCK
 from mutagen.mp3 import MP3
 
 from app.config import get_settings
+from app.worker.artwork import optimize_cover
 
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 MAX_UPLOAD_FILES = 50
@@ -100,6 +101,8 @@ def promote_tracks(tracks: list[tuple[Path, str]], *, artist: str, album: str, y
         if not source.is_file() or source.suffix.lower() not in AUDIO_UPLOAD_EXTENSIONS:
             raise HTTPException(status_code=400, detail="Invalid staged track")
         _load_audio(source)
+    if cover:
+        cover = optimize_cover(cover) or cover
     target = album_dir(artist, album)
     target.mkdir(parents=True, exist_ok=True)
     lock = target / ".ingest.lock"

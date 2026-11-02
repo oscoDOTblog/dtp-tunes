@@ -16,16 +16,37 @@ from app.services.ingest import cleanup_job, job_dir, promote_tracks
 
 logger = logging.getLogger("dtp_tunes.ingest")
 
+IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def _first_track_thumbnail(track: Path) -> Path | None:
+    """Return the thumbnail written next to the first downloaded track.
+
+    yt-dlp also writes a playlist-level thumbnail (e.g. ``00 - Playlist.jpg``)
+    that is only ~336x188. Picking images by name would grab that instead of the
+    per-track maxres thumbnail, so match the first track's filename exactly.
+    """
+    for suffix in IMAGE_SUFFIXES:
+        candidate = track.with_suffix(suffix)
+        if candidate.is_file():
+            return candidate
+    return None
+
 
 async def _download(db, job: dict, owner: str) -> list[dict]:
     target = job_dir(job["_id"])
     target.mkdir(parents=True, exist_ok=True)
     for old in target.glob("*.mp3"):
         old.unlink()
+    # Clear thumbnails from a previous attempt, but keep a user-uploaded cover.
+    for old in target.iterdir():
+        if old.is_file() and old.suffix.lower() in IMAGE_SUFFIXES and old.name != job.get("coverName"):
+            old.unlink()
     args = [
         "yt-dlp", "--yes-playlist",
         "--extract-audio", "--audio-format", "mp3", "--newline",
         "--write-thumbnail", "--convert-thumbnails", "jpg",
+        "--no-write-playlist-metafiles",
         "-f", "bestaudio/best", "-o", str(target / "%(playlist_index)02d - %(title)s.%(ext)s"),
         job["url"],
     ]
@@ -70,9 +91,9 @@ async def _download(db, job: dict, owner: str) -> list[dict]:
     if not files:
         raise RuntimeError("yt-dlp produced no MP3 files")
     if not job.get("coverName"):
-        thumbnails = sorted(target.glob("*.jpg"))
-        if thumbnails:
-            (target / "source.jpg").write_bytes(thumbnails[0].read_bytes())
+        thumbnail = _first_track_thumbnail(files[0])
+        if thumbnail:
+            (target / "source.jpg").write_bytes(thumbnail.read_bytes())
     return [{"id": index, "filename": file.name, "title": file.stem.split(" - ", 1)[-1]} for index, file in enumerate(files, 1)]
 
 

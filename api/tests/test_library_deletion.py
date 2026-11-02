@@ -20,3 +20,6 @@ def test_permanent_delete_routes_are_registered():
     routes = {(route.path, next(iter(route.methods))) for route in api_library.router.routes if route.methods}
     assert ("/api/songs/{song_id}", "DELETE") in routes
     assert ("/api/albums/{album_id}", "DELETE") in routes
+    assert ("/api/admin/albums/merge", "POST") in routes
+    assert ("/api/admin/albums/{album_id}", "PATCH") in routes
+    assert ("/api/admin/songs/{song_id}", "PATCH") in routes

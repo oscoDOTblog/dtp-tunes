@@ -159,6 +159,20 @@ async def get_album(db: AsyncIOMotorDatabase, album_id: str) -> dict | None:
     return await db.albums.find_one({"_id": album_id})
 
 
+async def update_album_metadata(db: AsyncIOMotorDatabase, album: dict, fields: dict) -> dict:
+    update = {**fields, "updatedAt": utcnow()}
+    if "name" in fields:
+        update["normalizedName"] = normalize(fields["name"])
+    await db.albums.update_one({"_id": album["_id"]}, {"$set": update})
+    if "name" in fields:
+        await db.songs.update_many(
+            {"albumId": album["_id"]},
+            {"$set": {"albumName": fields["name"], "updatedAt": utcnow()}},
+        )
+    album.update(update)
+    return album
+
+
 async def list_albums(
     db: AsyncIOMotorDatabase,
     *,
@@ -197,6 +211,45 @@ async def set_album_cover_path(db: AsyncIOMotorDatabase, album_id: str, cover_ar
     await db.albums.update_one({"_id": album_id}, {"$set": {"coverArtPath": cover_art_path}})
 
 
+async def merge_albums(db: AsyncIOMotorDatabase, *, source: dict, target: dict) -> int:
+    """Move source songs into target and remove the empty source album.
+
+    Song ids and paths remain unchanged, so playlists, history, queues, and the
+    underlying media files are preserved. Target metadata wins, but missing
+    values are filled from the source album.
+    """
+    metadata = {
+        field: source[field]
+        for field in ("year", "genre", "coverArtPath")
+        if not target.get(field) and source.get(field)
+    }
+    if metadata:
+        metadata["updatedAt"] = utcnow()
+        await db.albums.update_one({"_id": target["_id"]}, {"$set": metadata})
+
+    result = await db.songs.update_many(
+        {"albumId": source["_id"]},
+        {
+            "$set": {
+                "albumId": target["_id"],
+                "albumName": target["name"],
+                "artistId": target.get("artistId"),
+                "updatedAt": utcnow(),
+            }
+        },
+    )
+    await db.albums.delete_one({"_id": source["_id"]})
+    await db.stars.delete_many({"itemId": source["_id"], "itemType": "album"})
+    await recount_album_songs(db, target["_id"])
+
+    affected_artists = {source.get("artistId"), target.get("artistId")} - {None}
+    for artist_id in affected_artists:
+        await recount_artist_albums(db, artist_id)
+    await delete_orphan_artists(db)
+    await recount_genres(db)
+    return result.modified_count
+
+
 async def delete_orphan_albums(db: AsyncIOMotorDatabase) -> int:
     result = await db.albums.delete_many({"songCount": 0})
     return result.deleted_count
@@ -205,6 +258,17 @@ async def delete_orphan_albums(db: AsyncIOMotorDatabase) -> int:
 # --------------------------------------------------------------------------
 # Songs
 # --------------------------------------------------------------------------
+
+
+async def update_song_metadata(db: AsyncIOMotorDatabase, song: dict, fields: dict) -> dict:
+    update = {**fields, "updatedAt": utcnow()}
+    if "title" in fields:
+        update["normalizedTitle"] = normalize(fields["title"])
+    await db.songs.update_one({"_id": song["_id"]}, {"$set": update})
+    song.update(update)
+    if "genre" in fields:
+        await recount_genres(db)
+    return song
 
 
 async def upsert_song_by_path(db: AsyncIOMotorDatabase, *, path: str, fields: dict) -> tuple[dict, bool]:
