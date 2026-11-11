@@ -43,6 +43,10 @@ class UserCreate(CamelModel):
     role: Role = Role.USER
 
 
+class UserPasswordUpdate(CamelModel):
+    password: str = Field(min_length=8, max_length=256)
+
+
 class LoginRequest(CamelModel):
     username: str
     password: str

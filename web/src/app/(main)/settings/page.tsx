@@ -224,17 +224,24 @@ function ApiKeysSection() {
 }
 
 function AdminUsersSection() {
+  const { user: currentUser } = useAuth();
   const { data: users, refetch } = useFetch<User[]>("/api/admin/users");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [newRole, setNewRole] = useState<"admin" | "user">("user");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [resetFor, setResetFor] = useState<string | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
 
   async function createUser() {
     setError(null);
+    setNotice(null);
     try {
-      await api.post("/api/admin/users", { username, password, role: "user" });
+      await api.post("/api/admin/users", { username, password, role: newRole });
       setUsername("");
       setPassword("");
+      setNewRole("user");
       refetch();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create user");
@@ -242,13 +249,55 @@ function AdminUsersSection() {
   }
 
   async function toggleActive(user: User) {
-    await api.patch(`/api/admin/users/${user.id}/active?is_active=${!user.isActive}`);
-    refetch();
+    setError(null);
+    setNotice(null);
+    try {
+      await api.patch(`/api/admin/users/${user.id}/active?is_active=${!user.isActive}`);
+      refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to update user");
+    }
+  }
+
+  async function changeRole(user: User) {
+    setError(null);
+    setNotice(null);
+    try {
+      await api.patch(`/api/admin/users/${user.id}/role?role=${user.role === "admin" ? "user" : "admin"}`);
+      setNotice(`${user.username} is now ${user.role === "admin" ? "a user" : "an admin"}.`);
+      refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to change role");
+    }
+  }
+
+  async function resetUserPassword(user: User) {
+    setError(null);
+    setNotice(null);
+    try {
+      await api.patch(`/api/admin/users/${user.id}/password`, { password: resetPassword });
+      setNotice(
+        user.id === currentUser?.id
+          ? `Password updated for ${user.username}.`
+          : `Password updated for ${user.username}. They were signed out and must log in again.`,
+      );
+      setResetFor(null);
+      setResetPassword("");
+      refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to reset password");
+    }
   }
 
   async function deleteUser(user: User) {
-    await api.delete(`/api/admin/users/${user.id}`);
-    refetch();
+    setError(null);
+    setNotice(null);
+    try {
+      await api.delete(`/api/admin/users/${user.id}`);
+      refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to delete user");
+    }
   }
 
   return (
@@ -261,34 +310,94 @@ function AdminUsersSection() {
           <Input value={username} onChange={(e) => setUsername(e.target.value)} className="w-48" />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-fg-secondary">Password</label>
+          <label className="mb-1 block text-xs text-fg-secondary">Password (min 8 chars)</label>
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-48" />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-fg-secondary">Role</label>
+          <select
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value === "admin" ? "admin" : "user")}
+            className="h-11 rounded-lg border border-border-subtle bg-bg-elevated-2 px-3 text-sm text-fg-primary outline-none focus:border-accent"
+          >
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
         </div>
         <Button onClick={createUser}>
           <UserPlus size={16} /> Add user
         </Button>
       </div>
       {error && <p className="text-sm text-danger">{error}</p>}
+      {notice && <p className="text-sm text-fg-primary">{notice}</p>}
 
       <div className="flex flex-col gap-2">
-        {(users ?? []).map((user) => (
-          <div key={user.id} className="flex items-center justify-between rounded-lg bg-bg-elevated px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-fg-primary">
-                {user.username} <span className="text-xs text-fg-muted">({user.role})</span>
-              </p>
-              <p className="text-xs text-fg-muted">{user.isActive ? "Active" : "Disabled"}</p>
+        {(users ?? []).map((user) => {
+          const isSelf = user.id === currentUser?.id;
+          return (
+            <div key={user.id} className="flex flex-col gap-2 rounded-lg bg-bg-elevated px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-fg-primary">
+                    {user.username} <span className="text-xs text-fg-muted">({user.role})</span>
+                  </p>
+                  <p className="text-xs text-fg-muted">{user.isActive ? "Active" : "Disabled"}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => changeRole(user)}
+                    disabled={isSelf}
+                    title={isSelf ? "You cannot change your own role" : user.role === "admin" ? "Demote to user" : "Promote to admin"}
+                    className="text-xs text-fg-secondary hover:text-fg-primary disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {user.role === "admin" ? "Make user" : "Make admin"}
+                  </button>
+                  <button onClick={() => toggleActive(user)} className="text-xs text-fg-secondary hover:text-fg-primary">
+                    {user.isActive ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setNotice(null);
+                      setResetFor(resetFor === user.id ? null : user.id);
+                      setResetPassword("");
+                    }}
+                    className="text-xs text-fg-secondary hover:text-fg-primary"
+                  >
+                    {resetFor === user.id ? "Cancel" : "Reset password"}
+                  </button>
+                  <button
+                    onClick={() => deleteUser(user)}
+                    disabled={isSelf}
+                    title={isSelf ? "You cannot delete your own account" : "Delete user"}
+                    className="text-fg-secondary hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Delete user"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+              {resetFor === user.id && (
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-fg-secondary">
+                      New password for {user.username} (min 8 chars)
+                    </label>
+                    <Input
+                      type="password"
+                      value={resetPassword}
+                      onChange={(e) => setResetPassword(e.target.value)}
+                      className="w-56"
+                    />
+                  </div>
+                  <Button onClick={() => resetUserPassword(user)} disabled={resetPassword.length < 8}>
+                    <KeyRound size={16} /> Set password
+                  </Button>
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-3">
-              <button onClick={() => toggleActive(user)} className="text-xs text-fg-secondary hover:text-fg-primary">
-                {user.isActive ? "Disable" : "Enable"}
-              </button>
-              <button onClick={() => deleteUser(user)} className="text-fg-secondary hover:text-danger" aria-label="Delete user">
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

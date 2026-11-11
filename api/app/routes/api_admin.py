@@ -15,11 +15,14 @@ from app.models import (
     ScanJobStatus,
     UserCreate,
     UserOut,
+    UserPasswordUpdate,
 )
 from app.repositories import api_keys as api_keys_repo
 from app.repositories import catalog as catalog_repo
 from app.repositories import scan_jobs as scan_jobs_repo
+from app.repositories import sessions as sessions_repo
 from app.repositories import users as users_repo
+from app.security import hash_password
 from app.services import auth_service
 from app.worker.artwork import clear_cover_cache
 
@@ -60,10 +63,39 @@ async def set_user_active(user_id: str, is_active: bool, db: AsyncIOMotorDatabas
 
 
 @router.patch("/users/{user_id}/role")
-async def set_user_role(user_id: str, role: str, db: AsyncIOMotorDatabase = Depends(get_db), _: dict = Depends(require_admin)) -> dict:
+async def set_user_role(
+    user_id: str, role: str, db: AsyncIOMotorDatabase = Depends(get_db), admin: dict = Depends(require_admin)
+) -> dict:
     if role not in {"admin", "user"}:
         raise HTTPException(status_code=400, detail="Invalid role")
+    target = await users_repo.get_user_by_id(db, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user_id == admin["_id"] and target.get("role") != role:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    if target.get("role") == "admin" and role != "admin":
+        admins = [u for u in await users_repo.list_users(db) if u.get("role") == "admin"]
+        if len(admins) <= 1:
+            raise HTTPException(status_code=400, detail="Cannot remove the last admin")
     await users_repo.set_role(db, user_id, role)
+    return {"ok": True}
+
+
+@router.patch("/users/{user_id}/password")
+async def set_user_password(
+    user_id: str, body: UserPasswordUpdate, db: AsyncIOMotorDatabase = Depends(get_db), admin: dict = Depends(require_admin)
+) -> dict:
+    """Let an admin set any user's web login password (min 8 chars).
+
+    Resetting another user signs them out everywhere. Resetting your own
+    password keeps your current session so you are not locked out mid-task.
+    """
+    target = await users_repo.get_user_by_id(db, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    await users_repo.set_password(db, user_id, hash_password(body.password))
+    if user_id != admin["_id"]:
+        await sessions_repo.delete_all_sessions_for_user(db, user_id)
     return {"ok": True}
 
 

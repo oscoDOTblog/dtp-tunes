@@ -7,6 +7,20 @@ import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
+const AUDIO_EXTENSIONS = new Set([".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav"]);
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
+const MAX_FILES = 50;
+const COVER_FILE_NAMES = ["cover", "folder", "front", "albumart", "album_art", "artwork"];
+
+function extensionOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot).toLowerCase() : "";
+}
+
+function cleanTitle(name: string): string {
+  return name.replace(/\.[^.]+$/, "").replace(/^\s*\d+[\s._-]+/, "").trim();
+}
+
 export default function UploadMusicPage() {
   const { user } = useAuth();
   const [cover, setCover] = useState<File | null>(null);
@@ -16,8 +30,9 @@ export default function UploadMusicPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
-  const [tracks, setTracks] = useState<{ id: string; file: File; title: string }[]>([]);
+  const [tracks, setTracks] = useState<{ id: string; file: File; title: string; path?: string }[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number } | null>(null);
 
   function selectCover(file: File | null) {
@@ -28,7 +43,7 @@ export default function UploadMusicPage() {
 
   if (user?.role !== "admin") return <p className="p-6 text-fg-secondary">Admin access required.</p>;
   async function submit() {
-    setBusy(true); setError(null); setResult(null); setUploadProgress({ loaded: 0, total: 0 });
+    setBusy(true); setError(null); setResult(null); setNotice(null); setUploadProgress({ loaded: 0, total: 0 });
     const body = new FormData();
     for (const track of tracks) body.append("files", track.file);
     if (cover) body.append("cover", cover);
@@ -47,12 +62,55 @@ export default function UploadMusicPage() {
   }
 
   function selectFiles(selected: File[]) {
-    setTracks(selected.map((file, index) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}-${index}`,
+    addAudioFiles(selected.map((file) => ({ file, path: file.webkitRelativePath || undefined })), { replace: true });
+  }
+
+  function selectFolder(selected: File[]) {
+    const images = selected.filter((file) => IMAGE_EXTENSIONS.has(extensionOf(file.name)));
+    if (!cover && images.length > 0) {
+      const preferred = images.find((file) =>
+        COVER_FILE_NAMES.some((name) => file.name.toLowerCase().startsWith(name)),
+      ) ?? images[0];
+      selectCover(preferred);
+    }
+    const currentArtist = artist;
+    const currentAlbum = album;
+    const added = addAudioFiles(
+      selected.map((file) => ({ file, path: file.webkitRelativePath || undefined })),
+      { replace: true },
+    );
+    if (added > 0) {
+      const sample = selected.find((file) => AUDIO_EXTENSIONS.has(extensionOf(file.name)))?.webkitRelativePath;
+      const parts = sample?.split("/") ?? [];
+      if (parts.length >= 3 && !currentArtist) setArtist(parts[parts.length - 3]);
+      if (parts.length >= 2 && !currentAlbum) setAlbum(parts[parts.length - 2]);
+    }
+  }
+
+  function addAudioFiles(entries: { file: File; path?: string }[], options: { replace: boolean }): number {
+    const audio = entries.filter(({ file }) => AUDIO_EXTENSIONS.has(extensionOf(file.name)));
+    setError(null); setResult(null); setNotice(null);
+    if (entries.length > 0 && audio.length === 0) {
+      setError("No audio files found. Supported formats: MP3, FLAC, M4A, Ogg, Opus, WAV.");
+      return 0;
+    }
+    const sorted = [...audio].sort((a, b) => (a.path ?? a.file.name).localeCompare(b.path ?? b.file.name));
+    const skipped = entries.length - audio.length;
+    let capped = sorted;
+    if (sorted.length > MAX_FILES) {
+      capped = sorted.slice(0, MAX_FILES);
+      setNotice(`Added the first ${MAX_FILES} of ${sorted.length} audio files (upload limit). Upload the rest separately — same artist/album lands in the same album.`);
+    } else if (skipped > 0) {
+      setNotice(`Skipped ${skipped} non-audio ${skipped === 1 ? "file" : "files"}.`);
+    }
+    const base = options.replace ? 0 : tracks.length;
+    setTracks((options.replace ? [] : tracks).concat(capped.map(({ file, path }, index) => ({
+      id: `${path ?? file.name}-${file.size}-${file.lastModified}-${base + index}`,
       file,
-      title: file.name.replace(/\.[^.]+$/, "").replace(/^\s*\d+[\s._-]+/, "").trim(),
-    })));
-    setError(null); setResult(null);
+      title: cleanTitle(file.name),
+      path: path && path !== file.name ? path : undefined,
+    }))));
+    return capped.length;
   }
 
   function moveTrack(index: number, direction: number) {
@@ -73,12 +131,20 @@ export default function UploadMusicPage() {
   }
 
   return <div className="mx-auto flex max-w-3xl flex-col gap-5 p-6 pb-32">
-    <div><h1 className="text-3xl font-bold text-fg-primary">Upload audio</h1><p className="text-sm text-fg-secondary">Choose files, then review the album and track list before anything is uploaded.</p></div>
-    <label className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border-subtle bg-bg-elevated p-8 text-center transition-colors hover:border-accent hover:bg-bg-hover focus-within:border-accent">
-      <span className="inline-flex h-12 items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-black">Choose audio files</span>
-      <span className="text-sm text-fg-secondary">MP3, FLAC, M4A, Ogg, Opus, or WAV</span>
-      <input type="file" multiple accept=".mp3,.flac,.m4a,.ogg,.opus,.wav,audio/mpeg,audio/flac,audio/mp4,audio/ogg,audio/opus,audio/wav" onChange={(event) => selectFiles(Array.from(event.target.files ?? []))} className="sr-only" />
-    </label>
+    <div><h1 className="text-3xl font-bold text-fg-primary">Upload audio</h1><p className="text-sm text-fg-secondary">Choose files or a whole folder, then review the album and track list before anything is uploaded.</p></div>
+    <div className="flex flex-col items-stretch gap-3 rounded-xl border border-dashed border-border-subtle bg-bg-elevated p-8 text-center sm:flex-row sm:items-center sm:justify-center">
+      <label className="cursor-pointer focus-within:outline-2 focus-within:outline-accent">
+        <span className="inline-flex h-12 items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-black">Choose audio files</span>
+        <input type="file" multiple accept=".mp3,.flac,.m4a,.ogg,.opus,.wav,audio/mpeg,audio/flac,audio/mp4,audio/ogg,audio/opus,audio/wav" onChange={(event) => { selectFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} className="sr-only" />
+      </label>
+      <span className="text-sm text-fg-muted">or</span>
+      <label className="cursor-pointer focus-within:outline-2 focus-within:outline-accent">
+        <span className="inline-flex h-12 items-center justify-center rounded-full border border-accent px-6 text-base font-semibold text-accent">Choose a folder</span>
+        <input type="file" {...{ webkitdirectory: "" }} onChange={(event) => { selectFolder(Array.from(event.target.files ?? [])); event.target.value = ""; }} className="sr-only" />
+      </label>
+    </div>
+    <p className="-mt-2 text-center text-xs text-fg-secondary">MP3, FLAC, M4A, Ogg, Opus, or WAV · up to {MAX_FILES} tracks per upload · folder art and names are picked up automatically</p>
+    {notice && <p role="status" className="text-sm text-fg-secondary">{notice}</p>}
     {tracks.length > 0 && <section className="flex flex-col gap-5 rounded-xl border border-border-subtle bg-bg-elevated p-5">
       <h2 className="text-lg font-semibold text-fg-primary">Review album details</h2>
       <div className="grid gap-5 sm:grid-cols-[10rem_1fr]">
@@ -103,7 +169,7 @@ export default function UploadMusicPage() {
           <span className="w-7 text-center text-sm font-medium text-fg-secondary">{index + 1}</span>
           <div className="min-w-0 flex-1">
             <Input aria-label={`Track ${index + 1} title`} value={track.title} onChange={(event) => setTracks(tracks.map((item) => item.id === track.id ? { ...item, title: event.target.value } : item))} className="w-full" />
-            <p className="mt-1 truncate px-1 text-xs text-fg-secondary">{track.file.name} · {formatSize(track.file.size)}</p>
+            <p className="mt-1 truncate px-1 text-xs text-fg-secondary">{track.path ?? track.file.name} · {formatSize(track.file.size)}</p>
           </div>
           <div className="flex gap-1">
             <Button aria-label={`Move ${track.title} up`} variant="secondary" size="sm" onClick={() => moveTrack(index, -1)} disabled={index === 0}>↑</Button>
