@@ -28,7 +28,7 @@ except the `gateway`, which is the single public origin:
   `api`, disabling response buffering on streaming/media paths so byte-range
   playback and live transcodes aren't held in memory. By default it publishes
   only `127.0.0.1:8080` for host diagnostics. With
-  [`docker-compose.runtipi.yml`](../docker-compose.runtipi.yml), the gateway
+  [`docker-compose.prod.yml`](../docker-compose.prod.yml), the gateway
   also joins Runtipi’s `runtipi_tipi_main_network` and Traefik terminates TLS
   for `${DTP_TUNES_DOMAIN}` (see [`RUNTIPI_DEPLOYMENT.md`](RUNTIPI_DEPLOYMENT.md)).
   Nginx preserves incoming `X-Forwarded-Proto` so session cookies stay `Secure`

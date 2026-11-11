@@ -40,7 +40,7 @@ It is **not** the same as:
 
 | Mechanism | What you have today | Role |
 | --- | --- | --- |
-| Standalone compose + labels | [`docker-compose.yml`](docker-compose.yml) + [`docker-compose.runtipi.yml`](docker-compose.runtipi.yml) | Current production path ([`docs/RUNTIPI_DEPLOYMENT.md`](docs/RUNTIPI_DEPLOYMENT.md)) |
+| Standalone compose + labels | [`docker-compose.yml`](docker-compose.yml) + [`docker-compose.prod.yml`](docker-compose.prod.yml) | Current production path ([`docs/RUNTIPI_DEPLOYMENT.md`](docs/RUNTIPI_DEPLOYMENT.md)) |
 | `user-config` overrides | [`runtipi-user-configs/updated/navidrome.yml`](/Users/argo/Code/dtp/runtipi-user-configs/updated/navidrome.yml) | Patch **store** apps (Jellyfin/Navidrome volumes) |
 | Create custom app | Screenshot / YAML Editor | Dashboard-managed multi-service app with auto Traefik |
 | Custom app store | GitHub repo + `config.json` | Shareable/reusable store (overkill for one host) |
@@ -60,7 +60,7 @@ flowchart LR
 ## Critical differences vs current stack
 
 1. **Images, not `build:`** — Create App expects `image:` (UI “Image” field). Your api/web use `build:`. On Rath, build once and tag local images the custom app can pull from the host Docker daemon.
-2. **Traefik via `x-runtipi`, not hand-written labels** — Mark `gateway` with `is_main: true` and `internal_port: 80`. Drop the manual labels from [`docker-compose.runtipi.yml`](docker-compose.runtipi.yml); Runtipi generates routers onto `runtipi_tipi_main_network`.
+2. **Traefik via `x-runtipi`, not hand-written labels** — Mark `gateway` with `is_main: true` and `internal_port: 80`. Drop the manual labels from [`docker-compose.prod.yml`](docker-compose.prod.yml); Runtipi generates routers onto `runtipi_tipi_main_network`.
 3. **Do not attach Runtipi forward-auth** — Same rule as today: Subsonic clients cannot complete browser auth. When exposing the app, use a custom domain **without** Runtipi’s auth middleware (app owns cookie + Subsonic auth).
 4. **Music mount is host reality** — Bind `/mnt/yuna/navidrome/music:/music:ro` (same pattern as Navidrome’s user-config). Create App will **not** fix an empty NAS mount; `/music` must have files on the host first (`seen=0` scans were because that path was empty).
 5. **Stop the standalone stack first** — Two stacks claiming `Host(tunes.waifu.bond)` will fight in Traefik.
@@ -76,7 +76,7 @@ Use **YAML Editor** (bottom-right on Create App), not the per-service Essentials
 
 ```bash
 cd /home/yui/apps/dtp/dtp-tunes
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml down
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 ```
 
 - Build/tag images from the same tree (reuse values from `/home/yui/apps/dtp/dtp-tunes/.env` when filling Create App env):

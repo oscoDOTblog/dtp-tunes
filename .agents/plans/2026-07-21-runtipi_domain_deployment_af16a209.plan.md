@@ -37,7 +37,7 @@ flowchart LR
 
 ## Compose and routing
 
-- Add [`docker-compose.runtipi.yml`](../dtp-tunes/docker-compose.runtipi.yml) as a production overlay:
+- Add [`docker-compose.prod.yml`](../dtp-tunes/docker-compose.prod.yml) as a production overlay:
   - Attach only `gateway` to external network `runtipi_tipi_main_network`, while retaining the private dtp-tunes network for communication with `web` and `api`.
   - Add explicit Traefik HTTP-to-HTTPS redirect and secure router labels using `${DTP_TUNES_DOMAIN}`.
   - Set `traefik.docker.network=runtipi_tipi_main_network`, route to gateway port 80, and use `tls.certresolver=myresolver`.
@@ -63,7 +63,7 @@ flowchart LR
 
 ## Verification
 
-- Validate the merged configuration with `docker compose -f docker-compose.yml -f docker-compose.runtipi.yml config` and confirm only `gateway` joins the Runtipi network.
+- Validate the merged configuration with `docker compose -f docker-compose.yml -f docker-compose.prod.yml config` and confirm only `gateway` joins the Runtipi network.
 - Verify the external network exists, all services become healthy, HTTP redirects to HTTPS, Let’s Encrypt issues the expected certificate, and `/health` works through the public hostname.
 - Confirm login responses set `Secure; HttpOnly; SameSite=Lax`, byte-range audio returns `206 Partial Content`, `/rest/ping.view` works through HTTPS, and a representative Subsonic client can authenticate and stream.
 - Confirm direct access is unavailable on the server’s LAN IP at port 8080 while `127.0.0.1:8080` remains usable for local diagnostics.

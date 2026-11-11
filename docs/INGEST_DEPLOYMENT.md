@@ -35,12 +35,12 @@ sudo -u yui rm '/mnt/yuna/navidrome/music/Kzyboost/36 by 37/.tunes-permission-pr
 Validate configuration before recreation, then rebuild. The `ingest-init` one-shot service prepares only the named staging volume. It does not modify the host music tree. The API and ingestion worker bind `/music` read-write; the scanner worker binds it read-only.
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml config --quiet
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml up -d --build
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml exec api id
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml exec ingest-worker id
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml exec api stat -c '%A %u:%g %n' /music
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml ps
+docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api id
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec ingest-worker id
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api stat -c '%A %u:%g %n' /music
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
 In the admin UI, upload a small disposable MP3 to a test album, confirm it appears after the scan, add a `.txt` lyric sidecar through Edit song lyrics, and test one URL download through review/save. Confirm a queued download completes and that cancel/retry works. Check that ordinary users cannot open Add Music or its APIs. Check the already-running VideoDL UI and its existing queue/history afterward. A scan enqueue failure is reported separately from a successful file save; retry a library scan from Settings if needed.

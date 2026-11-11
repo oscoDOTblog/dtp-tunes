@@ -6,7 +6,7 @@ HTTPS on a public hostname you own.
 
 dtp-tunes is **not** installed from the Runtipi App Store and does **not** use
 the dashboard “Expose app” switch. Traefik discovers the gateway via Docker
-labels in [`docker-compose.runtipi.yml`](../docker-compose.runtipi.yml).
+labels in [`docker-compose.prod.yml`](../docker-compose.prod.yml).
 
 ## Architecture
 
@@ -99,7 +99,7 @@ Mount music where your library lives (bind mounts in `docker-compose.yml`):
 Validate the merged config first:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml config
+make prod-config
 ```
 
 Confirm:
@@ -109,17 +109,20 @@ Confirm:
 - No Runtipi `forwardauth` middleware is attached
 - API has no host port bindings
 
-Then:
+Then deploy (runs the environment preflight, rebuilds, waits for `/health`):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml up -d --build
+make prod-deploy
 ```
 
-Wait for healthy services:
+Check running services:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml ps
+make prod-ps
 ```
+
+The raw Compose equivalents are `docker compose -f docker-compose.yml
+-f docker-compose.prod.yml ...` — the Makefile just fills in those flags.
 
 ## Why not Runtipi “Expose app”?
 
@@ -183,7 +186,7 @@ first place to look.
 Stop the stack (leaves Runtipi alone):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml down
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 ```
 
 To remove only Traefik registration without wiping volumes, `down` without

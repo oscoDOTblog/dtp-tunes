@@ -2,7 +2,7 @@
 # and expose it on a public custom domain with Let's Encrypt.
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.runtipi.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
 # Requires in .env:
 #   DTP_TUNES_DOMAIN=music.example.com

@@ -82,43 +82,35 @@ passwords, keys, or tokens.
 ## Isolated local Docker debugging
 
 Do not run the ordinary Compose command locally when `.env` points at the
-production MongoDB. Use the local-debug launcher instead:
+production MongoDB. Use the Makefile instead:
 
 ```bash
 # Foreground, with image rebuilds
-./local-debug.sh up
+make local-up
 
 # Or detached
-./local-debug.sh up -d
+make local-up ARGS=-d
 
-# Stop while preserving local data
-./local-debug.sh down
+# Stop while preserving dev data
+make local-down
 
 # Inspect the resolved configuration
-./local-debug.sh config
+make local-config
 ```
 
-This mode uses the separate Compose project `dtp-tunes-local` and forces all
-database-using services to connect to
-`mongodb://mongodb:27017/DTP_local`, regardless of the Mongo settings in
-`.env`. Its data lives only in the named Docker volume
-`dtp-tunes-local-mongodb-data`. Local scans create independent song IDs and
-never copy production metadata.
+This mode uses the separate Compose project `dtp-tunes-local` against the
+**same** MongoDB configured in `.env` (typically Atlas), but forces all
+database-using services onto the dev collection prefix `tunes_dev_*`
+(prod stays on `tunes_*`). The gateway serves on `http://127.0.0.1:8082`
+so local and production stacks can run side by side. The admin user is
+bootstrapped into the dev collections on first boot. Local scans create
+independent song IDs and never copy production metadata.
 
-To permanently discard only the local Mongo database:
+To permanently delete only the dev collections (`tunes_dev_*`):
 
 ```bash
-./local-debug.sh reset
+make local-reset CONFIRM=yes
 ```
-
-The equivalent command without the launcher is:
-
-```bash
-docker compose --project-name dtp-tunes-local --profile bundled-db \
-  --file docker-compose.yml --file docker-compose.local.yml up --build
-```
-
-Production and Runtipi deployment commands are unchanged.
 
 ## Deploy behind Runtipi (custom domain)
 
@@ -130,10 +122,10 @@ HTTPS instead of publishing dtp-tunes on the LAN. This stack stays
 2. Point a DNS **A** record at your public IP; forward router ports **80/443**
    to the Runtipi host. Keep Cloudflare DNS-only for this hostname if you use
    Cloudflare.
-3. Start with both Compose files:
+3. Deploy (runs the environment preflight, rebuilds, and waits for `/health`):
 
    ```bash
-   docker compose -f docker-compose.yml -f docker-compose.runtipi.yml up -d --build
+   make prod-deploy
    ```
 
 4. Open `https://<DTP_TUNES_DOMAIN>/`. Subsonic clients use the same base URL.

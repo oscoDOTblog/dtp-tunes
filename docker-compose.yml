@@ -11,7 +11,7 @@ services:
   gateway:
     image: nginx:1.27-alpine
     # Loopback-only diagnostic port — not reachable from LAN/WAN.
-    # Public access in production goes through Runtipi Traefik (see docker-compose.runtipi.yml).
+    # Public access in production goes through Runtipi Traefik (see docker-compose.prod.yml).
     ports:
       - "127.0.0.1:${LOCAL_PORT:-8080}:80"
     volumes:

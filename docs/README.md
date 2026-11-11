@@ -41,8 +41,8 @@ include the same `-p <project-name>` in subsequent Compose commands.
 For the standard Runtipi deployment, after updating that checkout:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml up -d --build api gateway
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml logs --since=10m -f api gateway
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build api gateway
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --since=10m -f api gateway
 ```
 
 For a local deployment, omit the Runtipi overlay. Keep the same Compose file

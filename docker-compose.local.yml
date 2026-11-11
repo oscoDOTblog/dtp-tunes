@@ -1,46 +1,35 @@
 # Local-debug isolation overlay.
 #
-# Always use with docker-compose.yml. These explicit environment values take
-# precedence over env_file entries, so a production MONGODB_URI in .env can
-# never be used by the local-debug containers.
+# Always use with docker-compose.yml via the Makefile (make local-up, ...). The stack talks to
+# the SAME MongoDB (MONGODB_URI / MONGODB_DB from .env, typically Atlas) but
+# under a dev collection prefix, so debug data never touches prod collections:
+#   prod:  tunes_users, tunes_songs, ...
+#   local: tunes_dev_users, tunes_dev_songs, ...
+#
+# These explicit environment values take precedence over env_file entries, so
+# the production prefix can never be used by the local-debug containers.
+# Collection namespacing is enforced centrally (see api/app/db.py).
+#
+# NOTE: the gateway port is NOT overridden here (Compose would bind both
+# ports). The Makefile sets LOCAL_PORT=8082 for every local target instead,
+# so local (8082) and production (8080) stacks run side by side.
 services:
   config-check:
     environment:
-      MONGODB_URI: mongodb://mongodb:27017
-      MONGODB_DB: DTP_local
-      MONGODB_COLLECTION_PREFIX: tunes_
+      MONGODB_COLLECTION_PREFIX: tunes_dev_
 
   api:
     environment:
-      MONGODB_URI: mongodb://mongodb:27017
-      MONGODB_DB: DTP_local
-      MONGODB_COLLECTION_PREFIX: tunes_
-    depends_on:
-      mongodb:
-        condition: service_healthy
+      MONGODB_COLLECTION_PREFIX: tunes_dev_
 
   worker:
     environment:
-      MONGODB_URI: mongodb://mongodb:27017
-      MONGODB_DB: DTP_local
-      MONGODB_COLLECTION_PREFIX: tunes_
+      MONGODB_COLLECTION_PREFIX: tunes_dev_
 
   ingest-worker:
     environment:
-      MONGODB_URI: mongodb://mongodb:27017
-      MONGODB_DB: DTP_local
-      MONGODB_COLLECTION_PREFIX: tunes_
+      MONGODB_COLLECTION_PREFIX: tunes_dev_
 
   playlist-transfer-worker:
     environment:
-      MONGODB_URI: mongodb://mongodb:27017
-      MONGODB_DB: DTP_local
-      MONGODB_COLLECTION_PREFIX: tunes_
-
-  mongodb:
-    volumes:
-      - mongodb-data-local:/data/db
-
-volumes:
-  mongodb-data-local:
-    name: dtp-tunes-local-mongodb-data
+      MONGODB_COLLECTION_PREFIX: tunes_dev_

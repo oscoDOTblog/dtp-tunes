@@ -11,11 +11,11 @@ From the dtp-tunes directory on the Docker host, using the same .env and
 Compose project as the existing deployment:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml up -d --build api gateway
-docker compose -f docker-compose.yml -f docker-compose.runtipi.yml logs --since=10m -f api gateway
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build api gateway
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --since=10m -f api gateway
 ```
 
-For local deployments omit `-f docker-compose.runtipi.yml` (and use the same
+For local deployments omit `-f docker-compose.prod.yml` (and use the same
 file selection consistently). Retry downloading just one song in the Android
 app and note the time. No debug environment setting is needed.
 
