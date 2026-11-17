@@ -178,6 +178,7 @@ first place to look.
 | ACME / TLS errors | Ports 80/443 not reachable from internet, DNS wrong, CGNAT | Fix DNS/forwarding; wait; check Traefik logs |
 | Login cookie missing Secure | `X-Forwarded-Proto` dropped | Ensure Traefik → nginx preserves forwarded proto (see `gateway/nginx.conf`) |
 | Stalled streams | Buffering proxy (Cloudflare orange cloud, extra nginx) | DNS-only Cloudflare; keep Traefik buffering defaults; gateway already disables buffering for `/rest` and `/api` media |
+| `502/504` from the gateway right after a deploy | Pre-resolver gateway container (or any stale gateway) still dialing the previous `api` IP | Recreate the gateway once: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate --no-deps gateway`, then `make prod-health`. Current `gateway/nginx.conf` re-resolves upstreams per request, so this heals itself after that one recreation |
 | Conflict with another app | Same `Host(...)` rule | Change `DTP_TUNES_DOMAIN` |
 | `network runtipi_tipi_main_network declared as external, but could not be found` | Runtipi not started | Start Runtipi first |
 
