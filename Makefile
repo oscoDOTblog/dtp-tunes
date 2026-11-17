@@ -12,6 +12,7 @@
 #   make prod-config               print the resolved production configuration
 #   make prod-deploy               preflight, rebuild, start, wait for /health
 #   make prod-down                 stop production (volumes preserved)
+#   make prod-health                check the production /health endpoint
 #   make prod-ps                   list production containers
 #
 # Secrets live only in .env (gitignored). No flags to remember.
@@ -20,14 +21,16 @@
 COMPOSE_LOCAL := LOCAL_PORT=8082 docker compose --project-name dtp-tunes-local -f docker-compose.yml -f docker-compose.local.yml
 COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml
 
-# One shell per recipe, so heredocs work and a failing line stops the target.
-.ONESHELL:
+# Health-gate tuning: `make prod-deploy HEALTH_TRIES=60` waits longer.
+HEALTH_TRIES ?= 30
+HEALTH_WAIT ?= 5
 
-.PHONY: help local-up local-down local-config local-ps local-reset prod-config prod-deploy prod-down prod-ps
+# Portable style: one logical line per recipe step (works on old BSD make too).
+.PHONY: help local-up local-down local-config local-ps local-reset prod-config prod-deploy prod-down prod-health prod-ps
 
 help:
 	@echo "Targets: local-up [ARGS=-d], local-down, local-config, local-ps,"
-	@echo "         local-reset CONFIRM=yes, prod-config, prod-deploy, prod-down, prod-ps"
+	@echo "         local-reset CONFIRM=yes, prod-config, prod-deploy, prod-down, prod-health, prod-ps"
 
 local-up:
 	@echo "Local debug collections: <MONGODB_DB from .env>/tunes_dev_*"
@@ -50,18 +53,7 @@ local-reset:
 		exit 1; \
 	fi
 	$(COMPOSE_LOCAL) down
-	$(COMPOSE_LOCAL) run --rm -T api python - <<-'EOF'
-	import os
-	from pymongo import MongoClient
-	prefix = os.environ.get('MONGODB_COLLECTION_PREFIX', '')
-	if 'dev' not in prefix or prefix == 'tunes_':
-	    raise SystemExit('Refusing to reset: not a dev prefix: ' + prefix)
-	db = MongoClient(os.environ['MONGODB_URI'])[os.environ.get('MONGODB_DB', 'DTP')]
-	dropped = [name for name in db.list_collection_names() if name.startswith(prefix)]
-	for name in dropped:
-	    db.drop_collection(name)
-	print('Dropped ' + str(len(dropped)) + ' collection(s): ' + (', '.join(dropped) or '(none)'))
-	EOF
+	$(COMPOSE_LOCAL) run --rm -T api python - < scripts/reset-dev-collections.py
 
 prod-config:
 	$(COMPOSE_PROD) config --quiet && echo "Production config resolves."
@@ -69,17 +61,19 @@ prod-config:
 prod-deploy:
 	$(COMPOSE_PROD) run --rm --build config-check
 	$(COMPOSE_PROD) up -d --build
-	@echo "Waiting for http://127.0.0.1:$${LOCAL_PORT:-8080}/health ..."
-	@for i in $$(seq 1 30); do \
-		if curl -fsS http://127.0.0.1:$${LOCAL_PORT:-8080}/health >/dev/null 2>&1; then \
-			echo "Healthy."; break; \
-		fi; \
-		if [ $$i -eq 30 ]; then \
-			echo "ERROR: stack did not become healthy."; \
-			$(COMPOSE_PROD) ps; exit 1; \
-		fi; \
-		sleep 5; \
-	done
+	$(MAKE) prod-health
+
+# Same check prod-deploy runs, usable on its own against a running stack.
+# Written as continuation lines breaking only outside quotes, so it behaves
+# identically on old (3.81) and new make.
+prod-health:
+	@command -v curl >/dev/null 2>&1 || { echo "ERROR: curl is not installed."; exit 1; }
+	@URL=http://127.0.0.1:$${LOCAL_PORT:-8080}/health; TMP=$$(mktemp); trap 'rm -f "$$TMP"' EXIT; echo "Checking $$URL ..."; \
+	for i in $$(seq 1 $(HEALTH_TRIES)); do if OUT=$$(curl -sS --noproxy '*' --max-time 5 -o "$$TMP" -w '%{http_code}' "$$URL" 2>&1); then \
+	if [ "$$OUT" = 200 ]; then echo "Healthy:"; head -c 500 "$$TMP"; echo; exit 0; fi; \
+	echo "attempt $$i/$(HEALTH_TRIES): HTTP $$OUT: $$(head -c 200 "$$TMP")"; \
+	else echo "attempt $$i/$(HEALTH_TRIES): curl failed: $$OUT"; fi; sleep $(HEALTH_WAIT); done; \
+	echo "ERROR: stack did not become healthy at $$URL"; $(COMPOSE_PROD) ps; $(COMPOSE_PROD) logs --tail=30 gateway; exit 1
 
 prod-down:
 	$(COMPOSE_PROD) down
