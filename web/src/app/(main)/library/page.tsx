@@ -5,6 +5,7 @@ import { useFetch } from "@/lib/useFetch";
 import { AlbumCard } from "@/components/music/AlbumCard";
 import { ArtistCard } from "@/components/music/ArtistCard";
 import { SongRow } from "@/components/music/SongRow";
+import { LibrarySongs } from "@/components/music/LibrarySongs";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,11 +13,12 @@ import { cn } from "@/lib/utils";
 import type { Album, Artist, Song } from "@/lib/types";
 import { Library as LibraryIcon } from "lucide-react";
 
-type Tab = "albums" | "artists" | "starred";
+type Tab = "albums" | "artists" | "songs" | "starred";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "albums", label: "Albums" },
   { id: "artists", label: "Artists" },
+  { id: "songs", label: "Songs" },
   { id: "starred", label: "Liked Songs" },
 ];
 
@@ -31,13 +33,14 @@ export default function LibraryPage() {
     <div className="flex flex-col gap-6 p-6 pb-32">
       <h1 className="text-2xl font-bold text-fg-primary">Your Library</h1>
 
-      <div className="flex gap-2 border-b border-border-subtle">
+      <div className="flex gap-1 border-b border-border-subtle sm:gap-2">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
+            aria-pressed={tab === t.id}
             className={cn(
-              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+              "whitespace-nowrap px-2 py-2 text-sm font-medium border-b-2 -mb-px transition-colors sm:px-4",
               tab === t.id ? "border-accent text-fg-primary" : "border-transparent text-fg-secondary hover:text-fg-primary"
             )}
           >
@@ -87,6 +90,8 @@ export default function LibraryPage() {
           )}
         </>
       )}
+
+      {tab === "songs" && <LibrarySongs />}
 
       {tab === "starred" && (
         <>

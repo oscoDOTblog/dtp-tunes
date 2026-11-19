@@ -20,11 +20,14 @@ interface SongRowProps {
   queue: Song[];
   showAlbum?: boolean;
   showCover?: boolean;
+  showDetails?: boolean;
   onToggleStar?: (song: Song) => void;
   onDeleted?: () => void;
 }
 
-export function SongRow({ song, index, queue, showAlbum = true, showCover = false, onToggleStar, onDeleted }: SongRowProps) {
+export const detailedSongColumns = "md:grid-cols-[2rem_minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1.2fr)_3rem_2rem_4rem]";
+
+export function SongRow({ song, index, queue, showAlbum = true, showCover = false, showDetails = false, onToggleStar, onDeleted }: SongRowProps) {
   const router = useRouter();
   const currentSong = usePlayerStore((s) => s.currentSong());
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -99,6 +102,12 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
         <ListPlus size={16} />
         Save to playlist
       </MenuItem>
+      {showDetails && onToggleStar && (
+        <MenuItem onClick={() => onToggleStar(song)}>
+          <Heart size={16} />
+          {song.starred ? "Unlike song" : "Like song"}
+        </MenuItem>
+      )}
       <MenuItem onClick={handleDownload} disabled={downloading}>
         <Download size={16} />
         {downloading ? "Downloading…" : "Download"}
@@ -126,7 +135,8 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
           setContextPos({ x: event.clientX, y: event.clientY });
         }}
         className={cn(
-          "group grid grid-cols-[2rem_1fr_auto] sm:grid-cols-[2rem_1fr_10rem_3rem_3rem] items-center gap-4 rounded-lg px-3 py-2 hover:bg-bg-hover",
+          "group grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-4 rounded-lg px-3 py-2 hover:bg-bg-hover",
+          showDetails ? detailedSongColumns : "sm:grid-cols-[2rem_1fr_10rem_3rem_3rem]",
           isCurrent && "text-accent"
         )}
       >
@@ -153,11 +163,21 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
           )}
           <div className="min-w-0">
             <p className={cn("truncate text-sm font-medium", isCurrent ? "text-accent" : "text-fg-primary")}>{song.title}</p>
-            <p className="truncate text-xs text-fg-secondary">{song.artistName ?? "Unknown Artist"}</p>
+            <p className={cn("truncate text-xs text-fg-secondary", showDetails && "md:hidden")}>
+              {song.artistName ?? "Unknown Artist"}
+              {showDetails && song.albumName && ` · ${song.albumName}`}
+              {showDetails && song.year && ` · ${song.year}`}
+            </p>
           </div>
         </div>
 
-        {showAlbum ? (
+        {showDetails ? (
+          <>
+            <p className="hidden truncate text-sm text-fg-secondary md:block" title={song.albumName ?? undefined}>{song.albumName ?? "—"}</p>
+            <p className="hidden truncate text-sm text-fg-secondary md:block" title={song.artistName ?? undefined}>{song.artistName ?? "—"}</p>
+            <p className="hidden text-sm tabular-nums text-fg-secondary md:block">{song.year ?? "—"}</p>
+          </>
+        ) : showAlbum ? (
           <p className="hidden truncate text-sm text-fg-secondary sm:block">{song.albumName ?? ""}</p>
         ) : (
           <span className="hidden sm:block" />
@@ -166,7 +186,8 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
         <button
           onClick={() => onToggleStar?.(song)}
           className={cn(
-            "hidden items-center justify-center text-fg-secondary hover:text-accent sm:flex",
+            "hidden items-center justify-center text-fg-secondary hover:text-accent",
+            showDetails ? "md:flex" : "sm:flex",
             song.starred && "text-accent",
             !song.starred && "opacity-0 group-hover:opacity-100"
           )}
@@ -175,11 +196,11 @@ export function SongRow({ song, index, queue, showAlbum = true, showCover = fals
           <Heart size={16} fill={song.starred ? "currentColor" : "none"} />
         </button>
 
-        <div className="relative flex h-8 w-10 items-center justify-end text-xs text-fg-secondary">
-          <span className="pointer-events-none hidden tabular-nums sm:inline group-hover:sm:hidden">
+        <div className={cn("relative flex h-8 items-center justify-end text-xs text-fg-secondary", showDetails ? "w-10 md:w-full" : "w-10")}>
+          <span className={cn("pointer-events-none hidden tabular-nums", showDetails ? "md:inline" : "sm:inline group-hover:sm:hidden")}>
             {formatDuration(song.duration)}
           </span>
-          <div className="flex sm:absolute sm:inset-y-0 sm:right-0 sm:hidden sm:items-center group-hover:sm:flex">
+          <div className={cn("flex shrink-0", !showDetails && "sm:absolute sm:inset-y-0 sm:right-0 sm:hidden sm:items-center group-hover:sm:flex")}>
             <Menu
               trigger={
                 <button

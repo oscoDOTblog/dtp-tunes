@@ -6,6 +6,7 @@ import re
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import UpdateOne
+from pymongo.collation import Collation
 
 from app.repositories.base import normalize, utcnow
 from app.security import new_opaque_id
@@ -320,6 +321,26 @@ async def get_songs_by_ids(db: AsyncIOMotorDatabase, song_ids: list[str]) -> dic
 
 async def list_songs_by_album(db: AsyncIOMotorDatabase, album_id: str) -> list[dict]:
     return await db.songs.find({"albumId": album_id}).sort("track", 1).to_list(length=10000)
+
+
+async def list_songs(
+    db: AsyncIOMotorDatabase, *, query: str, sort: str, direction: int, skip: int, limit: int,
+) -> list[dict]:
+    match = {}
+    if query:
+        pattern = {"$regex": re.escape(query), "$options": "i"}
+        fields = [{field: pattern} for field in ("title", "albumName", "artistName")]
+        if re.fullmatch(r"[0-9]{1,4}", query):
+            fields.append({"year": int(query)})
+        match = {"$or": fields}
+    return await (
+        db.songs.find(match)
+        .collation(Collation(locale="en", strength=2))
+        .sort([(sort, direction), ("_id", 1)])
+        .skip(skip)
+        .limit(limit)
+        .to_list(length=limit)
+    )
 
 
 async def list_songs_by_genre(db: AsyncIOMotorDatabase, genre: str, *, skip: int = 0, limit: int = 500) -> list[dict]:

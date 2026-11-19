@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -38,6 +39,11 @@ class SongMetadataUpdate(BaseModel):
     genre: str | None = Field(default=None, max_length=100)
     track: int | None = Field(default=None, ge=1)
     discNumber: int | None = Field(default=None, ge=1)
+
+
+class SongsPage(BaseModel):
+    songs: list[SongOut]
+    hasMore: bool
 
 
 def _delete_song_files(relative_path: str) -> None:
@@ -156,6 +162,29 @@ async def search(q: str = Query(..., min_length=1), db: AsyncIOMotorDatabase = D
         artists=[artist_out(a) for a in results["artists"]],
         albums=[album_out(a) for a in results["albums"]],
         songs=[song_out(s, starred, can_edit_lyrics=user.get("role") == "admin") for s in results["songs"]],
+    )
+
+
+@router.get("/songs", response_model=SongsPage)
+async def list_songs(
+    q: str = Query("", max_length=300),
+    sort: Literal["title", "albumName", "artistName", "year"] = "title",
+    direction: Literal["asc", "desc"] = "asc",
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    user: dict = Depends(require_user),
+) -> SongsPage:
+    songs, starred = await asyncio.gather(
+        catalog_repo.list_songs(
+            db, query=q.strip(), sort=sort, direction=1 if direction == "asc" else -1,
+            skip=skip, limit=limit + 1,
+        ),
+        social_repo.starred_ids(db, user["_id"], "song"),
+    )
+    return SongsPage(
+        songs=[song_out(song, starred, can_edit_lyrics=user.get("role") == "admin") for song in songs[:limit]],
+        hasMore=len(songs) > limit,
     )
 
 
