@@ -27,8 +27,12 @@ def _cover_needs_refresh(album_doc: dict) -> bool:
     return not os.path.isfile(absolute)
 
 
+def _raise_walk_error(error: OSError) -> None:
+    raise error
+
+
 def _iter_audio_files(music_root: str):
-    for dirpath, _dirnames, filenames in os.walk(music_root):
+    for dirpath, _dirnames, filenames in os.walk(music_root, onerror=_raise_walk_error):
         for filename in filenames:
             absolute = os.path.join(dirpath, filename)
             if not is_supported(absolute):
@@ -55,15 +59,18 @@ async def run_scan_job(db: AsyncIOMotorDatabase, job_id: str, *, owner: str) -> 
     try:
         for absolute_path in _iter_audio_files(music_root):
             relative_path = os.path.relpath(absolute_path, music_root)
+            seen_paths.add(relative_path)
             try:
                 await _scan_one_file(db, absolute_path=absolute_path, relative_path=relative_path, job_id=job_id)
-                seen_paths.add(relative_path)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Failed to scan %s: %s", relative_path, exc)
                 await scan_jobs_repo.update_progress(db, job_id, errorCount=1)
             await scan_jobs_repo.renew_lease(db, job_id, owner=owner)
 
         existing_paths = await catalog_repo.all_song_paths(db)
+        if existing_paths and not seen_paths:
+            raise RuntimeError("Music folder contains no audio files. Check the library mount before scanning again.")
+
         missing_paths = list(existing_paths - seen_paths)
         deleted_songs = await catalog_repo.delete_songs_by_paths(db, missing_paths)
         affected_albums = {s["albumId"] for s in deleted_songs if s.get("albumId")}

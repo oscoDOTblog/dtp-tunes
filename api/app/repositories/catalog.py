@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo import UpdateOne
 
 from app.repositories.base import normalize, utcnow
 from app.security import new_opaque_id
@@ -280,8 +281,9 @@ async def upsert_song_by_path(db: AsyncIOMotorDatabase, *, path: str, fields: di
         await db.songs.update_one({"_id": existing["_id"]}, {"$set": fields})
         existing.update(fields)
         return existing, False
+    missing_song = await db.missingSongIds.find_one({"_id": path})
     doc = {
-        "_id": new_opaque_id(),
+        "_id": missing_song["songId"] if missing_song else new_opaque_id(),
         "path": path,
         "playCount": 0,
         "createdAt": now,
@@ -346,11 +348,16 @@ async def all_song_paths(db: AsyncIOMotorDatabase) -> set[str]:
 
 
 async def delete_songs_by_paths(db: AsyncIOMotorDatabase, paths: list[str]) -> list[dict]:
-    """Delete songs whose path no longer exists on disk; returns deleted docs for cleanup."""
+    """Keep the IDs of missing files before removing them from the active catalog."""
     if not paths:
         return []
     docs = await db.songs.find({"path": {"$in": paths}}).to_list(length=len(paths))
-    await db.songs.delete_many({"path": {"$in": paths}})
+    if docs:
+        await db.missingSongIds.bulk_write([
+            UpdateOne({"_id": song["path"]}, {"$set": {"songId": song["_id"]}}, upsert=True)
+            for song in docs
+        ])
+        await db.songs.delete_many({"_id": {"$in": [song["_id"] for song in docs]}})
     return docs
 
 
